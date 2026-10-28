@@ -11,7 +11,7 @@
  *   --format <json|md|text>    output format (default: text)
  *   --out <file>               write report to file instead of stdout
  *   --fail-on <severity>       exit 1 if any finding is >= Low|Medium|High|Critical
- *   --scoring <mean|weighted>  DREAD aggregation method (default: mean)
+ *   --scoring <risk|mean|weighted>  DREAD aggregation (default: risk = likelihood × impact)
  *   --rules <file>             custom rule base (default: bundled STRIDE rules)
  *
  * Exit codes:
@@ -34,7 +34,7 @@ const EXIT = { OK: 0, THRESHOLD: 1, INVALID: 2, ERROR: 3 };
 
 const USAGE = `Usage:
   stride-engine analyze <architecture.json|yaml> [--format json|md|text] [--out file]
-                        [--fail-on Low|Medium|High|Critical] [--scoring mean|weighted] [--rules file]
+                        [--fail-on Low|Medium|High|Critical] [--scoring risk|mean|weighted] [--rules file]
   stride-engine rules [--rules file]`;
 
 function parseArgs(argv) {
@@ -90,7 +90,7 @@ function main(argv, io = { stdout: process.stdout, stderr: process.stderr }) {
     if (!file) throw new Error(`analyze requires an architecture file\n${USAGE}`);
 
     const failOn = args['fail-on'] ? normaliseSeverity(args['fail-on']) : null;
-    const report = analyse(readArchitecture(file), { rules, scoring: { method: args.scoring || 'mean' } });
+    const report = analyse(readArchitecture(file), { rules, scoring: { method: args.scoring } });
     const output = render(report, args.format || 'text');
 
     if (args.out) fs.writeFileSync(args.out, output);

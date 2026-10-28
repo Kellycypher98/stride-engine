@@ -35,6 +35,34 @@ test('api: POST /analyze returns a report; GET /health and /rules respond', asyn
   assert.match(md.headers.get('content-type'), /text\/markdown/);
 });
 
+test('api: security headers are set and stack/framework details are not exposed', async () => {
+  const res = await fetch(`${base}/health`);
+  assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+  assert.match(res.headers.get('content-security-policy'), /default-src 'none'/);
+  assert.equal(res.headers.get('cache-control'), 'no-store');
+  assert.equal(res.headers.get('x-powered-by'), null);
+  const report = await (await post('/analyze', loadExample())).json();
+  assert.equal(report.scoring.method, 'risk', 'API defaults to risk scoring');
+});
+
+test('api: /analyze is rate limited per client', async () => {
+  const app = createApp({ rateLimit: { windowMs: 60_000, limit: 2 } });
+  const srv = app.listen(0);
+  await new Promise((r) => srv.once('listening', r));
+  const url = `http://127.0.0.1:${srv.address().port}/analyze`;
+  const send = () => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(loadExample()) });
+  try {
+    assert.equal((await send()).status, 200);
+    assert.equal((await send()).status, 200);
+    const limited = await send();
+    assert.equal(limited.status, 429);
+    assert.ok(limited.headers.get('ratelimit') || limited.headers.get('ratelimit-policy'));
+    assert.equal((await fetch(url.replace('/analyze', '/health'))).status, 200, 'health is not limited');
+  } finally {
+    srv.close();
+  }
+});
+
 test('api: error handling — 422 invalid model, 400 malformed body / bad params, no stack leaks', async () => {
   const invalid = await post('/analyze', { name: 'x' });
   assert.equal(invalid.status, 422);

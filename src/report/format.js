@@ -15,7 +15,8 @@ function vector(v) {
 }
 
 function scoringLabel(scoring) {
-  if (scoring.method !== 'weighted') return 'DREAD arithmetic mean';
+  if (scoring.method === 'risk') return 'DREAD likelihood × impact, OWASP severity matrix';
+  if (scoring.method === 'mean') return 'DREAD arithmetic mean';
   return `DREAD weighted (${DIMENSIONS.map((d) => `${DREAD_ABBR[d]}=${scoring.weights[d]}`).join(', ')})`;
 }
 
@@ -43,6 +44,10 @@ function toMarkdown(report) {
     lines.push(`**${f.severity} (${f.score.toFixed(1)})** · ${f.category} · rule ${f.ruleId} · ${f.target.type} \`${f.target.id}\``, '');
     lines.push(f.description, '');
     lines.push(`DREAD base ${vector(f.dread.base)} → final ${vector(f.dread.final)}`);
+    if (f.dread.risk) {
+      const r = f.dread.risk;
+      lines.push(`Likelihood ${r.likelihood} (${r.likelihoodLevel}) × impact ${r.impact} (${r.impactLevel})`);
+    }
     for (const a of f.dread.adjustments) lines.push(`- ${a.reason}`);
     lines.push('', '**Remediation**', '');
     for (const r of f.remediation) lines.push(`- ${r}`);

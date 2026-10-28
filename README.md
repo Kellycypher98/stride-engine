@@ -15,7 +15,7 @@ npm test                                   # 31 tests
 node src/cli.js analyze examples/ecommerce.json
 node src/cli.js analyze examples/ecommerce.json --format md --out report.md
 node src/cli.js analyze examples/ecommerce.json --fail-on Critical   # exit 1 → fails the build
-npm start                                  # REST API on :3000
+npm start                                  # web UI + REST API on http://localhost:3000
 ```
 
 ## Layout
@@ -29,6 +29,7 @@ npm start                                  # REST API on :3000
 | `src/rules/stride.rules.json` | 18 rules, 3 per STRIDE category, with CWE/OWASP/AWS Well-Architected references |
 | `src/report/format.js` | JSON, Markdown and text renderers |
 | `src/cli.js` | CLI with `--fail-on` gating |
+| `src/web/` | Web interface: paste/upload/choose a model, severity summary, architecture diagram, filterable findings, Markdown/JSON download. Plain JS, no third-party front-end code |
 | `src/api/server.js` | Express API (helmet security headers, rate limiting, 1 MB body limit) |
 | `examples/ecommerce.json` | Case study 1: AWS serverless e-commerce platform |
 
@@ -89,6 +90,17 @@ The same architecture, written in any order, gives a byte-identical report and t
 ## Exit codes
 
 `0` ok · `1` `--fail-on` threshold breached · `2` invalid architecture · `3` usage / I/O / rule-base error
+
+## Web interface
+
+`npm start`, then open http://localhost:3000. Choose the bundled example (or paste/upload a JSON or YAML model),
+pick a scoring method and press **Analyse** (or Ctrl/⌘+Enter). The report shows severity counts, STRIDE coverage,
+an architecture diagram with trust boundaries as columns (components outlined by their worst finding; click one to
+filter), and a findings table that expands to show the threat, remediation, DREAD vector, likelihood × impact and the
+reason for every score adjustment. Reports download as Markdown or JSON.
+
+The page uses no third-party code and is served with a same-origin-only CSP (no inline script or style); all text
+from the model is inserted as text, never HTML.
 
 ## API hardening
 

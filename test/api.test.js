@@ -75,3 +75,37 @@ test('api: error handling — 422 invalid model, 400 malformed body / bad params
   assert.equal((await post('/analyze?scoring=median', loadExample())).status, 400);
   assert.equal((await post('/analyze?format=pdf', loadExample())).status, 400);
 });
+
+test('web: UI is served with a same-origin CSP; API routes keep deny-all', async () => {
+  const page = await fetch(`${base}/`);
+  assert.equal(page.status, 200);
+  assert.match(page.headers.get('content-type'), /text\/html/);
+  const csp = page.headers.get('content-security-policy');
+  assert.match(csp, /script-src 'self'/);
+  assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval/);
+  assert.match(await page.text(), /stride-engine/);
+  assert.equal((await fetch(`${base}/app.js`)).status, 200);
+  assert.equal((await fetch(`${base}/health`)).headers.get('content-security-policy'), "default-src 'none';frame-ancestors 'none'");
+});
+
+test('api: examples are listed and served; unknown names and traversal attempts are 404', async () => {
+  const list = await (await fetch(`${base}/examples`)).json();
+  assert.ok(list.some((e) => e.name === 'ecommerce'));
+  const ex = await fetch(`${base}/examples/ecommerce`);
+  assert.equal(ex.status, 200);
+  assert.deepEqual(await ex.json(), loadExample());
+  assert.equal((await fetch(`${base}/examples/nope`)).status, 404);
+  assert.equal((await fetch(`${base}/examples/..%2Fpackage`)).status, 404);
+});
+
+test('api: YAML bodies are accepted and give the same report as JSON', async () => {
+  const yaml = require('js-yaml');
+  const asJson = await (await post('/analyze', loadExample())).json();
+  const res = await fetch(`${base}/analyze`, { method: 'POST', headers: { 'content-type': 'application/yaml' }, body: yaml.dump(loadExample()) });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), asJson);
+  const bad = await fetch(`${base}/analyze`, { method: 'POST', headers: { 'content-type': 'application/yaml' }, body: 'a: [unclosed' });
+  assert.equal(bad.status, 400);
+  const tagged = await fetch(`${base}/analyze`, { method: 'POST', headers: { 'content-type': 'application/yaml' }, body: 'name: !!js/function "function(){}"' });
+  assert.equal(tagged.status, 400, 'non-JSON YAML tags are rejected');
+});

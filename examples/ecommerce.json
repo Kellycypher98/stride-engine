@@ -1,0 +1,90 @@
+{
+  "name": "Reference E-commerce Platform (AWS serverless)",
+  "version": "1.0",
+  "description": "Case study 1. CloudFront + API Gateway front end, Lambda/ECS services, DynamoDB/RDS/SQS/S3 data tier, third-party payment provider. Controls deliberately mixed so the model contains both secure and insecure patterns.",
+  "trustBoundaries": [
+    { "id": "internet", "name": "Public Internet", "level": 0 },
+    { "id": "third-party", "name": "Third-party SaaS", "level": 1 },
+    { "id": "edge", "name": "AWS Edge / Public Endpoints", "level": 1 },
+    { "id": "app", "name": "Application VPC (private subnets)", "level": 2 },
+    { "id": "data", "name": "Data Tier (isolated subnets)", "level": 3 }
+  ],
+  "components": [
+    { "id": "customer", "name": "Customer", "type": "user", "trustBoundary": "internet" },
+    { "id": "admin", "name": "Store Administrator", "type": "user", "trustBoundary": "internet" },
+    {
+      "id": "cdn", "name": "CloudFront Distribution", "type": "cdn", "trustBoundary": "edge",
+      "properties": { "publicFacing": true, "waf": false }
+    },
+    {
+      "id": "static-site", "name": "Storefront Static Assets (S3)", "type": "object_storage", "trustBoundary": "app",
+      "properties": { "dataClassification": "public", "encryptionAtRest": true, "logging": true }
+    },
+    {
+      "id": "product-images", "name": "Product Image Bucket (S3)", "type": "object_storage", "trustBoundary": "edge",
+      "description": "Bucket policy grants public read; also stores supplier price sheets.",
+      "properties": { "publicFacing": true, "dataClassification": "internal", "encryptionAtRest": true, "logging": false }
+    },
+    {
+      "id": "api", "name": "API Gateway", "type": "api", "trustBoundary": "edge",
+      "properties": {
+        "publicFacing": true, "authentication": "oauth", "authorization": true, "inputValidation": true,
+        "logging": true, "rateLimited": true, "waf": false, "leastPrivilege": true, "dependencyScanning": true
+      }
+    },
+    {
+      "id": "auth", "name": "Cognito User Pool", "type": "identity_provider", "trustBoundary": "edge",
+      "properties": { "publicFacing": true, "mfa": false, "dataClassification": "restricted" }
+    },
+    {
+      "id": "order-service", "name": "Order Service (Lambda)", "type": "function", "trustBoundary": "app",
+      "properties": {
+        "authentication": "token", "authorization": false, "inputValidation": true, "logging": true,
+        "leastPrivilege": false, "dependencyScanning": true, "dataClassification": "confidential"
+      }
+    },
+    {
+      "id": "catalog-service", "name": "Catalog Service (Lambda)", "type": "function", "trustBoundary": "app",
+      "properties": {
+        "authentication": "none", "inputValidation": false, "logging": false,
+        "leastPrivilege": true, "dependencyScanning": false, "dataClassification": "public"
+      }
+    },
+    {
+      "id": "payment-service", "name": "Payment Service (ECS Fargate)", "type": "service", "trustBoundary": "app",
+      "properties": {
+        "authentication": "mtls", "authorization": true, "inputValidation": true, "logging": true,
+        "leastPrivilege": true, "privileged": true, "dependencyScanning": true, "dataClassification": "restricted"
+      }
+    },
+    {
+      "id": "orders-db", "name": "Orders Table (DynamoDB)", "type": "database", "trustBoundary": "data",
+      "properties": { "dataClassification": "confidential", "encryptionAtRest": true, "logging": false, "redundancy": true }
+    },
+    {
+      "id": "customer-db", "name": "Customer Database (RDS PostgreSQL)", "type": "database", "trustBoundary": "data",
+      "properties": { "dataClassification": "restricted", "encryptionAtRest": false, "logging": true, "redundancy": false }
+    },
+    {
+      "id": "order-queue", "name": "Order Events Queue (SQS)", "type": "queue", "trustBoundary": "data",
+      "properties": { "dataClassification": "internal", "encryptionAtRest": true, "redundancy": true }
+    },
+    { "id": "payment-provider", "name": "Payment Provider API", "type": "external_service", "trustBoundary": "third-party" }
+  ],
+  "dataFlows": [
+    { "id": "f01", "from": "customer", "to": "cdn", "protocol": "https", "dataClassification": "public" },
+    { "id": "f02", "from": "customer", "to": "api", "protocol": "https", "authenticated": true, "dataClassification": "confidential" },
+    { "id": "f03", "from": "customer", "to": "auth", "protocol": "https", "dataClassification": "restricted", "description": "Sign-in credentials" },
+    { "id": "f04", "from": "admin", "to": "api", "protocol": "https", "authenticated": true, "dataClassification": "confidential" },
+    { "id": "f05", "from": "cdn", "to": "static-site", "protocol": "https", "authenticated": true, "dataClassification": "public", "description": "Origin Access Control" },
+    { "id": "f06", "from": "cdn", "to": "product-images", "protocol": "https", "dataClassification": "public" },
+    { "id": "f07", "from": "api", "to": "order-service", "protocol": "https", "authenticated": true, "dataClassification": "confidential" },
+    { "id": "f08", "from": "api", "to": "catalog-service", "protocol": "https", "authenticated": false, "dataClassification": "public" },
+    { "id": "f09", "from": "order-service", "to": "orders-db", "protocol": "https", "authenticated": true, "dataClassification": "confidential" },
+    { "id": "f10", "from": "order-service", "to": "order-queue", "protocol": "https", "authenticated": true, "dataClassification": "internal" },
+    { "id": "f11", "from": "order-queue", "to": "payment-service", "protocol": "https", "authenticated": true, "dataClassification": "internal" },
+    { "id": "f12", "from": "payment-service", "to": "payment-provider", "protocol": "mtls", "authenticated": true, "dataClassification": "restricted" },
+    { "id": "f13", "from": "payment-service", "to": "customer-db", "protocol": "tcp", "authenticated": true, "dataClassification": "restricted", "description": "PostgreSQL without sslmode=require" },
+    { "id": "f14", "from": "catalog-service", "to": "product-images", "protocol": "https", "authenticated": true, "dataClassification": "public" }
+  ]
+}

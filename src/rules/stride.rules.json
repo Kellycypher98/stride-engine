@@ -1,0 +1,330 @@
+{
+  "version": "1.0.0",
+  "description": "Baseline STRIDE rule base: 18 rules, 3 per category. Undeclared controls are treated as absent.",
+  "rules": [
+    {
+      "id": "S-01",
+      "category": "Spoofing",
+      "title": "Unauthenticated internet-facing entry point",
+      "description": "An application component reachable from the internet does not authenticate callers, so any party can impersonate a legitimate user.",
+      "appliesTo": "component",
+      "when": { "all": [
+        { "fact": "component.type", "op": "in", "value": ["web_app", "api", "service", "function"] },
+        { "fact": "internetExposed", "op": "truthy" },
+        { "any": [
+          { "fact": "component.properties.authentication", "op": "absent" },
+          { "fact": "component.properties.authentication", "op": "eq", "value": "none" }
+        ] }
+      ] },
+      "dread": { "damage": 7, "reproducibility": 8, "exploitability": 7, "affectedUsers": 7, "discoverability": 7 },
+      "remediation": [
+        "Require authentication on every internet-facing route (e.g. Cognito authorizer on API Gateway).",
+        "Prefer token-based (OAuth 2.0 / OIDC) authentication over static credentials."
+      ],
+      "references": ["CWE-306", "OWASP A07:2021", "AWS WA SEC02"]
+    },
+    {
+      "id": "S-02",
+      "category": "Spoofing",
+      "title": "Unauthenticated cross-boundary service call",
+      "description": "A service-to-service data flow crosses a trust boundary without the caller authenticating, allowing an attacker in the lower-trust zone to impersonate the calling service.",
+      "appliesTo": "dataFlow",
+      "when": { "all": [
+        { "fact": "crossesBoundary", "op": "truthy" },
+        { "fact": "flow.authenticated", "op": "notTrue" },
+        { "fact": "source.kind", "op": "ne", "value": "actor" },
+        { "fact": "target.kind", "op": "ne", "value": "actor" }
+      ] },
+      "dread": { "damage": 6, "reproducibility": 6, "exploitability": 5, "affectedUsers": 6, "discoverability": 4 },
+      "remediation": [
+        "Authenticate service-to-service calls with IAM SigV4, mTLS or signed service tokens.",
+        "Restrict callers with resource policies or security groups scoped to the expected source."
+      ],
+      "references": ["CWE-290", "AWS WA SEC02"]
+    },
+    {
+      "id": "S-03",
+      "category": "Spoofing",
+      "title": "Weak authentication on exposed component",
+      "description": "An internet-facing component relies on weak authentication (basic auth or static API keys), or the identity provider does not enforce multi-factor authentication, making credential theft and replay practical.",
+      "appliesTo": "component",
+      "when": { "all": [
+        { "fact": "internetExposed", "op": "truthy" },
+        { "any": [
+          { "all": [
+            { "fact": "component.type", "op": "in", "value": ["web_app", "api", "service", "function"] },
+            { "fact": "component.properties.authentication", "op": "in", "value": ["basic", "api_key"] }
+          ] },
+          { "all": [
+            { "fact": "component.type", "op": "eq", "value": "identity_provider" },
+            { "fact": "component.properties.mfa", "op": "notTrue" }
+          ] }
+        ] }
+      ] },
+      "dread": { "damage": 7, "reproducibility": 6, "exploitability": 5, "affectedUsers": 7, "discoverability": 5 },
+      "remediation": [
+        "Replace basic auth and static API keys with short-lived tokens (OAuth 2.0 / OIDC).",
+        "Enforce MFA in the identity provider, at minimum for privileged and administrative users."
+      ],
+      "references": ["CWE-308", "CWE-1390", "OWASP A07:2021"]
+    },
+    {
+      "id": "T-01",
+      "category": "Tampering",
+      "title": "Unencrypted data flow across trust boundary",
+      "description": "Data crosses a trust boundary over an unencrypted channel and can be modified in transit by an on-path attacker.",
+      "appliesTo": "dataFlow",
+      "when": { "all": [
+        { "fact": "crossesBoundary", "op": "truthy" },
+        { "fact": "flow.encrypted", "op": "notTrue" }
+      ] },
+      "dread": { "damage": 7, "reproducibility": 6, "exploitability": 5, "affectedUsers": 6, "discoverability": 5 },
+      "remediation": [
+        "Use TLS 1.2+ for every flow that crosses a trust boundary.",
+        "Enforce HTTPS-only listeners and redirect plain HTTP at the edge."
+      ],
+      "references": ["CWE-319", "CWE-345", "AWS WA SEC09"]
+    },
+    {
+      "id": "T-02",
+      "category": "Tampering",
+      "title": "Missing input validation",
+      "description": "An application component does not validate input, exposing it to injection and parameter tampering.",
+      "appliesTo": "component",
+      "when": { "all": [
+        { "fact": "component.type", "op": "in", "value": ["web_app", "api", "service", "function"] },
+        { "fact": "component.properties.inputValidation", "op": "notTrue" }
+      ] },
+      "dread": { "damage": 7, "reproducibility": 7, "exploitability": 6, "affectedUsers": 7, "discoverability": 6 },
+      "remediation": [
+        "Validate all input against an allow-list schema at the trust boundary (e.g. Joi, API Gateway request validation).",
+        "Use parameterised queries and context-aware output encoding."
+      ],
+      "references": ["CWE-20", "OWASP A03:2021"]
+    },
+    {
+      "id": "T-03",
+      "category": "Tampering",
+      "title": "Unscanned third-party dependencies",
+      "description": "The component's build pipeline does not scan third-party dependencies, so a compromised or vulnerable package can tamper with application behaviour.",
+      "appliesTo": "component",
+      "when": { "all": [
+        { "fact": "component.type", "op": "in", "value": ["web_app", "api", "service", "function"] },
+        { "fact": "component.properties.dependencyScanning", "op": "notTrue" }
+      ] },
+      "dread": { "damage": 6, "reproducibility": 5, "exploitability": 4, "affectedUsers": 7, "discoverability": 3 },
+      "remediation": [
+        "Add software composition analysis to CI (npm audit, Snyk, Dependabot) with a failing security gate.",
+        "Pin dependency versions with a lockfile and verify package integrity."
+      ],
+      "references": ["CWE-1104", "OWASP A06:2021", "OWASP A08:2021"]
+    },
+    {
+      "id": "R-01",
+      "category": "Repudiation",
+      "title": "No audit logging on application component",
+      "description": "An application component does not log security-relevant actions, so users or attackers can deny having performed them.",
+      "appliesTo": "component",
+      "when": { "all": [
+        { "fact": "component.type", "op": "in", "value": ["web_app", "api", "service", "function"] },
+        { "fact": "component.properties.logging", "op": "notTrue" }
+      ] },
+      "dread": { "damage": 4, "reproducibility": 8, "exploitability": 6, "affectedUsers": 5, "discoverability": 5 },
+      "remediation": [
+        "Log authentication events, authorisation failures and state-changing actions with actor identity and timestamp.",
+        "Ship logs to a central, append-only store (e.g. CloudWatch Logs with restricted delete permissions)."
+      ],
+      "references": ["CWE-778", "OWASP A09:2021", "AWS WA SEC04"]
+    },
+    {
+      "id": "R-02",
+      "category": "Repudiation",
+      "title": "No access logging on sensitive data store",
+      "description": "A data store holding confidential or restricted data does not record access, so reads and changes cannot be attributed.",
+      "appliesTo": "component",
+      "when": { "all": [
+        { "fact": "component.kind", "op": "eq", "value": "datastore" },
+        { "fact": "component.properties.dataClassification", "op": "in", "value": ["confidential", "restricted"] },
+        { "fact": "component.properties.logging", "op": "notTrue" }
+      ] },
+      "dread": { "damage": 5, "reproducibility": 7, "exploitability": 5, "affectedUsers": 5, "discoverability": 4 },
+      "remediation": [
+        "Enable data-plane access logging (e.g. S3 server access logs, CloudTrail data events, DynamoDB stream auditing).",
+        "Retain access logs for the period required by your compliance obligations."
+      ],
+      "references": ["CWE-778", "AWS WA SEC04"]
+    },
+    {
+      "id": "R-03",
+      "category": "Repudiation",
+      "title": "No centralised security monitoring",
+      "description": "The architecture has no monitoring or log aggregation component, so events cannot be correlated or protected from tampering.",
+      "appliesTo": "system",
+      "when": { "fact": "system.hasMonitoring", "op": "falsy" },
+      "dread": { "damage": 5, "reproducibility": 6, "exploitability": 5, "affectedUsers": 6, "discoverability": 4 },
+      "remediation": [
+        "Add a central monitoring component (e.g. CloudTrail + CloudWatch, or a SIEM) and model it in the architecture.",
+        "Protect log integrity with log-file validation and a separate logging account."
+      ],
+      "references": ["OWASP A09:2021", "AWS WA SEC04"]
+    },
+    {
+      "id": "I-01",
+      "category": "Information Disclosure",
+      "title": "Sensitive data store not encrypted at rest",
+      "description": "A data store holding confidential or restricted data is not encrypted at rest, exposing data if storage media, snapshots or backups are accessed.",
+      "appliesTo": "component",
+      "when": { "all": [
+        { "fact": "component.kind", "op": "eq", "value": "datastore" },
+        { "fact": "component.properties.dataClassification", "op": "in", "value": ["confidential", "restricted"] },
+        { "fact": "component.properties.encryptionAtRest", "op": "notTrue" }
+      ] },
+      "dread": { "damage": 8, "reproducibility": 4, "exploitability": 4, "affectedUsers": 8, "discoverability": 4 },
+      "remediation": [
+        "Enable encryption at rest with KMS-managed keys (SSE-KMS for S3, KMS encryption for DynamoDB/RDS).",
+        "Restrict kms:Decrypt to the roles that need it."
+      ],
+      "references": ["CWE-311", "AWS WA SEC08"]
+    },
+    {
+      "id": "I-02",
+      "category": "Information Disclosure",
+      "title": "Sensitive data transmitted in cleartext",
+      "description": "A data flow carrying confidential or restricted data is unencrypted and can be read by anyone able to observe the channel.",
+      "appliesTo": "dataFlow",
+      "when": { "all": [
+        { "fact": "sensitive", "op": "truthy" },
+        { "fact": "flow.encrypted", "op": "notTrue" }
+      ] },
+      "dread": { "damage": 8, "reproducibility": 6, "exploitability": 5, "affectedUsers": 7, "discoverability": 5 },
+      "remediation": [
+        "Encrypt the flow with TLS 1.2+, including flows inside the VPC when they carry sensitive data.",
+        "Consider field-level encryption for the most sensitive attributes."
+      ],
+      "references": ["CWE-319", "AWS WA SEC09"]
+    },
+    {
+      "id": "I-03",
+      "category": "Information Disclosure",
+      "title": "Non-public data store exposed to the internet",
+      "description": "A data store that does not hold exclusively public data is reachable from the internet — the classic misconfigured-bucket exposure.",
+      "appliesTo": "component",
+      "when": { "all": [
+        { "fact": "component.kind", "op": "eq", "value": "datastore" },
+        { "fact": "internetExposed", "op": "truthy" },
+        { "fact": "component.properties.dataClassification", "op": "ne", "value": "public" }
+      ] },
+      "dread": { "damage": 9, "reproducibility": 8, "exploitability": 8, "affectedUsers": 9, "discoverability": 7 },
+      "remediation": [
+        "Block public access (S3 Block Public Access at account level) and serve content only through an authenticated path.",
+        "Place data stores in private subnets with no internet route."
+      ],
+      "references": ["CWE-200", "CWE-732", "AWS WA SEC03"]
+    },
+    {
+      "id": "D-01",
+      "category": "Denial of Service",
+      "title": "No rate limiting on exposed component",
+      "description": "An internet-facing component does not rate-limit requests, so it can be exhausted by request floods or brute-force traffic.",
+      "appliesTo": "component",
+      "when": { "all": [
+        { "fact": "component.type", "op": "in", "value": ["web_app", "api", "service", "function", "load_balancer"] },
+        { "fact": "internetExposed", "op": "truthy" },
+        { "fact": "component.properties.rateLimited", "op": "notTrue" }
+      ] },
+      "dread": { "damage": 5, "reproducibility": 8, "exploitability": 7, "affectedUsers": 8, "discoverability": 7 },
+      "remediation": [
+        "Configure throttling (API Gateway usage plans / stage throttling) and per-client quotas.",
+        "Add WAF rate-based rules for unauthenticated endpoints."
+      ],
+      "references": ["CWE-770", "OWASP API4:2023"]
+    },
+    {
+      "id": "D-02",
+      "category": "Denial of Service",
+      "title": "No edge protection for internet-facing system",
+      "description": "The system is internet-facing but no edge component or API layer has a web application firewall, leaving it exposed to volumetric and application-layer attacks.",
+      "appliesTo": "system",
+      "when": { "all": [
+        { "fact": "system.hasPublicFacing", "op": "truthy" },
+        { "fact": "system.hasEdgeProtection", "op": "falsy" }
+      ] },
+      "dread": { "damage": 6, "reproducibility": 7, "exploitability": 6, "affectedUsers": 8, "discoverability": 6 },
+      "remediation": [
+        "Front the system with CloudFront and AWS WAF (managed rule groups) and enable AWS Shield.",
+        "Model the edge component explicitly with waf: true once in place."
+      ],
+      "references": ["CWE-400", "AWS WA SEC05"]
+    },
+    {
+      "id": "D-03",
+      "category": "Denial of Service",
+      "title": "Single point of failure in stateful component",
+      "description": "A database, queue or cache has no redundancy, so a single failure or targeted attack makes dependent services unavailable.",
+      "appliesTo": "component",
+      "when": { "all": [
+        { "fact": "component.type", "op": "in", "value": ["database", "queue", "cache"] },
+        { "fact": "component.properties.redundancy", "op": "notTrue" }
+      ] },
+      "dread": { "damage": 6, "reproducibility": 4, "exploitability": 3, "affectedUsers": 8, "discoverability": 3 },
+      "remediation": [
+        "Deploy across multiple Availability Zones or use a managed service with built-in replication.",
+        "Define and test backup and restore procedures."
+      ],
+      "references": ["CWE-400", "AWS WA Reliability Pillar"]
+    },
+    {
+      "id": "E-01",
+      "category": "Elevation of Privilege",
+      "title": "Over-permissive execution role",
+      "description": "A compute component's execution role is not scoped to least privilege, so a compromise of the component grants broad access to other resources.",
+      "appliesTo": "component",
+      "when": { "all": [
+        { "fact": "component.type", "op": "in", "value": ["api", "service", "function"] },
+        { "fact": "component.properties.leastPrivilege", "op": "notTrue" }
+      ] },
+      "dread": { "damage": 8, "reproducibility": 5, "exploitability": 5, "affectedUsers": 7, "discoverability": 4 },
+      "remediation": [
+        "Scope IAM execution roles to specific actions and resource ARNs; avoid wildcards.",
+        "Use IAM Access Analyzer to generate policies from observed access."
+      ],
+      "references": ["CWE-269", "AWS WA SEC03"]
+    },
+    {
+      "id": "E-02",
+      "category": "Elevation of Privilege",
+      "title": "Authentication without authorisation",
+      "description": "The component authenticates callers but does not enforce object- or function-level authorisation, so any authenticated user can reach other users' data or privileged functions.",
+      "appliesTo": "component",
+      "when": { "all": [
+        { "fact": "component.type", "op": "in", "value": ["web_app", "api", "service", "function"] },
+        { "fact": "component.properties.authentication", "op": "exists" },
+        { "fact": "component.properties.authentication", "op": "ne", "value": "none" },
+        { "fact": "component.properties.authorization", "op": "notTrue" }
+      ] },
+      "dread": { "damage": 8, "reproducibility": 7, "exploitability": 6, "affectedUsers": 7, "discoverability": 6 },
+      "remediation": [
+        "Enforce authorisation checks on every request, server-side, against the resource owner and role.",
+        "Deny by default and centralise access-control logic."
+      ],
+      "references": ["CWE-285", "OWASP A01:2021", "OWASP API1:2023"]
+    },
+    {
+      "id": "E-03",
+      "category": "Elevation of Privilege",
+      "title": "Component runs with elevated privileges",
+      "description": "The component runs as root or in a privileged container, so any code-execution flaw yields full control of the host or runtime.",
+      "appliesTo": "component",
+      "when": { "all": [
+        { "fact": "component.type", "op": "in", "value": ["web_app", "api", "service", "function"] },
+        { "fact": "component.properties.privileged", "op": "eq", "value": true }
+      ] },
+      "dread": { "damage": 9, "reproducibility": 5, "exploitability": 4, "affectedUsers": 8, "discoverability": 3 },
+      "remediation": [
+        "Run as a non-root user and drop all Linux capabilities not explicitly required.",
+        "Disable privileged mode in task/pod definitions."
+      ],
+      "references": ["CWE-250", "AWS WA SEC06"]
+    }
+  ]
+}

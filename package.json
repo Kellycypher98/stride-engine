@@ -1,0 +1,25 @@
+{
+  "name": "stride-engine",
+  "version": "0.1.0",
+  "description": "Rule-based STRIDE threat detection with DREAD risk scoring for DevSecOps pipelines",
+  "main": "src/engine/index.js",
+  "bin": {
+    "stride-engine": "src/cli.js"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\"",
+    "analyze:example": "node src/cli.js analyze examples/ecommerce.json --format text",
+    "start": "node src/api/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": ["threat-modelling", "stride", "dread", "devsecops", "security"],
+  "author": "Kelvin Osei Boateng",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2",
+    "joi": "^17.13.3",
+    "js-yaml": "^4.1.0"
+  }
+}

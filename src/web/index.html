@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>stride-engine</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">◆</span>
+      <div>
+        <h1>stride-engine</h1>
+        <p class="tagline">Automated STRIDE threat modelling with DREAD risk scoring</p>
+      </div>
+    </div>
+    <nav class="toplinks" aria-label="Resources">
+      <a href="rules" target="_blank" rel="noopener">Rule base (JSON)</a>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <!-- ======================= INPUT ======================= -->
+    <section class="panel input-panel" aria-labelledby="input-h">
+      <div class="panel-head">
+        <h2 id="input-h"><span class="step">1</span> Architecture model</h2>
+      </div>
+
+      <div class="toolbar">
+        <label class="field">
+          <span>Example</span>
+          <select id="example-select" aria-label="Load an example architecture">
+            <option value="">Choose…</option>
+          </select>
+        </label>
+        <label class="btn btn-ghost file-btn">
+          Upload file
+          <input id="file-input" type="file" accept=".json,.yaml,.yml,application/json,text/yaml" hidden>
+        </label>
+        <span id="format-badge" class="badge muted" title="Detected input format">JSON</span>
+      </div>
+
+      <label for="model-input" class="sr-only">Architecture model (JSON or YAML)</label>
+      <textarea id="model-input" spellcheck="false" autocomplete="off"
+        placeholder='Paste an architecture model (JSON or YAML), choose an example, or upload a file.&#10;&#10;{ "name": "...", "trustBoundaries": [...], "components": [...], "dataFlows": [...] }'></textarea>
+
+      <div class="actions">
+        <label class="field">
+          <span>Scoring</span>
+          <select id="scoring-select">
+            <option value="risk" selected>Likelihood × impact (default)</option>
+            <option value="mean">Classic DREAD mean</option>
+            <option value="weighted">Weighted DREAD</option>
+          </select>
+        </label>
+        <button id="analyze-btn" class="btn btn-primary" type="button">Analyse</button>
+      </div>
+
+      <div id="errors" class="errors" role="alert" hidden></div>
+    </section>
+
+    <!-- ======================= RESULTS ======================= -->
+    <section class="panel results-panel" aria-labelledby="results-h" aria-live="polite">
+      <div class="panel-head">
+        <h2 id="results-h"><span class="step">2</span> Threat report</h2>
+        <div class="downloads" id="downloads" hidden>
+          <button class="btn btn-ghost" id="dl-md" type="button">Download Markdown</button>
+          <button class="btn btn-ghost" id="dl-json" type="button">Download JSON</button>
+        </div>
+      </div>
+
+      <div id="empty-state" class="empty">
+        <p>Load an example or paste a model, then press <strong>Analyse</strong>.</p>
+        <p class="muted">The model is analysed on the server and is not stored.</p>
+      </div>
+
+      <div id="report" hidden>
+        <p id="report-meta" class="muted small"></p>
+
+        <div class="cards" id="severity-cards"></div>
+
+        <div class="split">
+          <div class="subpanel">
+            <h3>Architecture <span class="muted small">(click a component to filter the findings)</span></h3>
+            <div id="diagram" class="diagram"></div>
+          </div>
+          <div class="subpanel">
+            <h3>STRIDE coverage</h3>
+            <div id="stride-bars" class="bars"></div>
+          </div>
+        </div>
+
+        <div class="subpanel">
+          <div class="findings-head">
+            <h3>Findings <span id="findings-count" class="muted"></span></h3>
+            <div class="filters">
+              <select id="filter-severity" aria-label="Filter by severity">
+                <option value="">All severities</option>
+              </select>
+              <select id="filter-category" aria-label="Filter by STRIDE category">
+                <option value="">All categories</option>
+              </select>
+              <button id="clear-target" class="chip" type="button" hidden></button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="findings">
+              <thead>
+                <tr><th>Severity</th><th class="num">Score</th><th>Rule</th><th>Threat</th><th>Target</th></tr>
+              </thead>
+              <tbody id="findings-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot muted small">
+    MSc Cyber Security artefact · Arden University · Submitted models are processed in memory only.
+  </footer>
+</body>
+</html>

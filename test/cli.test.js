@@ -20,10 +20,14 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'stride-cli-'));
 
 test('cli: exit codes for pipeline gating (0 pass, 1 threshold, 2 invalid, 3 error)', () => {
   assert.equal(run(['analyze', EXAMPLE]).code, EXIT.OK);
-  assert.equal(run(['analyze', EXAMPLE, '--fail-on', 'critical']).code, EXIT.OK);
-  const breached = run(['analyze', EXAMPLE, '--fail-on', 'high']);
+  // default risk scoring: the reference model has Critical findings
+  const breached = run(['analyze', EXAMPLE, '--fail-on', 'critical']);
   assert.equal(breached.code, EXIT.THRESHOLD);
   assert.match(breached.stderr, /failing build/);
+  // classic mean scoring tops out at High
+  assert.equal(run(['analyze', EXAMPLE, '--scoring', 'mean', '--fail-on', 'critical']).code, EXIT.OK);
+  assert.equal(run(['analyze', EXAMPLE, '--scoring', 'mean', '--fail-on', 'high']).code, EXIT.THRESHOLD);
+  assert.equal(run(['analyze', EXAMPLE, '--scoring', 'median']).code, EXIT.ERROR);
 
   const bad = path.join(tmp, 'bad.json');
   fs.writeFileSync(bad, JSON.stringify({ name: 'x', trustBoundaries: [], components: [] }));

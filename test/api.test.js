@@ -91,6 +91,8 @@ test('web: UI is served with a same-origin CSP; API routes keep deny-all', async
 test('api: examples are listed and served; unknown names and traversal attempts are 404', async () => {
   const list = await (await fetch(`${base}/examples`)).json();
   assert.ok(list.some((e) => e.name === 'ecommerce'));
+  assert.ok(list.some((e) => e.name === 'healthcare'));
+  assert.ok(!list.some((e) => e.name.endsWith('.seeded')), 'evaluation keys are not offered as models');
   const ex = await fetch(`${base}/examples/ecommerce`);
   assert.equal(ex.status, 200);
   assert.deepEqual(await ex.json(), loadExample());

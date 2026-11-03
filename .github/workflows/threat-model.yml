@@ -20,6 +20,8 @@ jobs:
           code=$?
           echo "stride-engine exit code: $code"
           test "$code" -eq 1
+      - name: Case study 2 detection
+        run: node scripts/compare.js examples/healthcare.json examples/healthcare.seeded.json
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: threat-report, path: threat-report.md }

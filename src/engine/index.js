@@ -178,8 +178,11 @@ function canonicalModel(arch) {
   };
 }
 
+// Severity first: under the risk matrix, severity is not monotonic in score
+// (high impact × medium likelihood outranks medium × high at a similar score).
 function compareFindings(a, b) {
   return (
+    SEVERITY_ORDER.indexOf(b.severity) - SEVERITY_ORDER.indexOf(a.severity) ||
     b.score - a.score ||
     STRIDE.indexOf(a.category) - STRIDE.indexOf(b.category) ||
     (a.ruleId < b.ruleId ? -1 : a.ruleId > b.ruleId ? 1 : 0) ||
@@ -217,7 +220,12 @@ function analyse(input, options = {}) {
         target: view.target,
         score: risk.score,
         severity: risk.severity,
-        dread: { base: risk.base, adjustments: risk.adjustments, final: risk.final },
+        dread: {
+          base: risk.base,
+          adjustments: risk.adjustments,
+          final: risk.final,
+          ...(risk.risk ? { risk: risk.risk } : {}),
+        },
         remediation: rule.remediation,
         references: rule.references,
       });

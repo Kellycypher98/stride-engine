@@ -47,3 +47,21 @@ test('dread: severity band boundaries', () => {
   assert.equal(severityFor(7), 'High');
   assert.equal(severityFor(9), 'Critical');
 });
+
+test('dread: risk method = likelihood × impact with OWASP severity matrix', () => {
+  const risk = normaliseScoring();
+  assert.equal(risk.method, 'risk', 'default method');
+  // impact = (9+9)/2 = 9 (High); likelihood = (8+8+7)/3 ≈ 7.67 (High) → Critical
+  const crit = scoreThreat({ damage: 9, affectedUsers: 9, reproducibility: 8, exploitability: 8, discoverability: 7 }, neutral, risk);
+  assert.equal(crit.score, 6.9);
+  assert.equal(crit.severity, 'Critical');
+  assert.deepEqual(crit.risk, { likelihood: 7.7, likelihoodLevel: 'High', impact: 9, impactLevel: 'High' });
+  // high impact, low likelihood → Medium (matrix), not driven by the raw product
+  const hl = scoreThreat({ damage: 9, affectedUsers: 9, reproducibility: 3, exploitability: 3, discoverability: 3 }, neutral, risk);
+  assert.equal(hl.severity, 'Medium');
+  // low impact, high likelihood → Medium; low/low → Low
+  assert.equal(scoreThreat({ damage: 2, affectedUsers: 2, reproducibility: 9, exploitability: 9, discoverability: 9 }, neutral, risk).severity, 'Medium');
+  assert.equal(scoreThreat({ damage: 2, affectedUsers: 2, reproducibility: 2, exploitability: 2, discoverability: 2 }, neutral, risk).severity, 'Low');
+  // mean / weighted results carry no risk block
+  assert.equal(scoreThreat(base, neutral, mean).risk, undefined);
+});

@@ -9,9 +9,18 @@
  * reason so a score can always be traced back to the model.
  *
  * Aggregation is configurable:
+ *   - "risk"     (default) likelihood × impact, structured after the OWASP Risk
+ *                Rating Methodology:
+ *                  impact     = mean(damage, affectedUsers)
+ *                  likelihood = mean(reproducibility, exploitability, discoverability)
+ *                  score      = likelihood × impact / 10            (0.1–10, for ranking)
+ *                  severity   = OWASP severity matrix over the Low/Medium/High
+ *                               levels of likelihood and impact
  *   - "mean"     classic DREAD: arithmetic mean of the five dimensions
- *   - "weighted" weighted mean; default weights below are PROVISIONAL and
- *                pending a thesis decision (see README, "Open decisions")
+ *   - "weighted" weighted mean of the five dimensions
+ *
+ * "mean" and "weighted" are kept so the thesis can compare against classic
+ * DREAD: on the reference model both compress 13/16 findings into Medium.
  */
 
 const DIMENSIONS = Object.freeze([
@@ -38,6 +47,29 @@ const SEVERITY_BANDS = Object.freeze([
 ]);
 
 const SEVERITY_ORDER = Object.freeze(['Low', 'Medium', 'High', 'Critical']);
+
+const METHODS = Object.freeze(['risk', 'mean', 'weighted']);
+const DEFAULT_METHOD = 'risk';
+
+/** Likelihood / impact levels on the 1–10 scale (same cut points as the bands). */
+const levelOf = (x) => (x < 4 ? 'Low' : x < 7 ? 'Medium' : 'High');
+
+/**
+ * OWASP Risk Rating "overall risk severity" matrix, indexed [impact][likelihood].
+ * OWASP's lowest cell ("Note") is mapped to Low.
+ */
+const RISK_MATRIX = Object.freeze({
+  High: Object.freeze({ Low: 'Medium', Medium: 'High', High: 'Critical' }),
+  Medium: Object.freeze({ Low: 'Low', Medium: 'Medium', High: 'High' }),
+  Low: Object.freeze({ Low: 'Low', Medium: 'Low', High: 'Medium' }),
+});
+
+function likelihoodImpact(v) {
+  return {
+    likelihood: (v.reproducibility + v.exploitability + v.discoverability) / 3,
+    impact: (v.damage + v.affectedUsers) / 2,
+  };
+}
 
 const clamp = (n) => Math.min(10, Math.max(1, n));
 const round1 = (n) => Math.round(n * 10) / 10;
@@ -90,6 +122,10 @@ function validateWeights(weights) {
 }
 
 function aggregate(vector, scoring) {
+  if (scoring.method === 'risk') {
+    const { likelihood, impact } = likelihoodImpact(vector);
+    return (likelihood * impact) / 10;
+  }
   if (scoring.method === 'mean') {
     return DIMENSIONS.reduce((s, d) => s + vector[d], 0) / DIMENSIONS.length;
   }
@@ -104,8 +140,8 @@ function severityFor(score) {
 }
 
 function normaliseScoring(options = {}) {
-  const method = options.method || 'mean';
-  if (!['mean', 'weighted'].includes(method)) throw new Error(`Unknown scoring method "${method}"`);
+  const method = options.method || DEFAULT_METHOD;
+  if (!METHODS.includes(method)) throw new Error(`Unknown scoring method "${method}"`);
   const scoring = { method };
   if (method === 'weighted') {
     scoring.weights = { ...DEFAULT_WEIGHTS, ...(options.weights || {}) };
@@ -129,13 +165,21 @@ function scoreThreat(base, context, scoring) {
     applied.push({ id: adj.id, reason: adj.reason, delta: adj.delta });
   }
   const score = round1(aggregate(final, scoring));
-  return {
+  const result = {
     base: pick(base),
     adjustments: applied,
     final: pick(final),
     score,
     severity: severityFor(score),
   };
+  if (scoring.method === 'risk') {
+    const { likelihood, impact } = likelihoodImpact(final);
+    const l = levelOf(likelihood);
+    const i = levelOf(impact);
+    result.risk = { likelihood: round1(likelihood), likelihoodLevel: l, impact: round1(impact), impactLevel: i };
+    result.severity = RISK_MATRIX[i][l];
+  }
+  return result;
 }
 
 // Fixed key order keeps serialised output byte-identical.
@@ -154,4 +198,8 @@ module.exports = {
   SEVERITY_BANDS,
   SEVERITY_ORDER,
   ADJUSTMENTS,
+  METHODS,
+  DEFAULT_METHOD,
+  RISK_MATRIX,
+  levelOf,
 };

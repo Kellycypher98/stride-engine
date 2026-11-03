@@ -55,15 +55,20 @@ test('engine: reference e-commerce example produces the expected findings', () =
   assert.equal(report.findings[0].id, 'I-03@product-images', 'highest risk first');
 });
 
-test('engine: findings are sorted by score desc, then STRIDE order, rule id, target id', () => {
-  const { findings } = analyse(loadExample());
-  for (let i = 1; i < findings.length; i += 1) {
-    const a = findings[i - 1];
-    const b = findings[i];
-    assert.ok(a.score > b.score || (a.score === b.score && (
-      STRIDE.indexOf(a.category) < STRIDE.indexOf(b.category)
-      || (a.category === b.category && `${a.ruleId}${a.target.id}` <= `${b.ruleId}${b.target.id}`))),
-    `${a.id} before ${b.id}`);
+test('engine: findings are sorted by severity, then score desc, STRIDE order, rule id, target id', () => {
+  const sev = ['Low', 'Medium', 'High', 'Critical'];
+  for (const method of ['risk', 'mean']) {
+    const { findings } = analyse(loadExample(), { scoring: { method } });
+    for (let i = 1; i < findings.length; i += 1) {
+      const a = findings[i - 1];
+      const b = findings[i];
+      const sa = sev.indexOf(a.severity);
+      const sb = sev.indexOf(b.severity);
+      assert.ok(sa > sb || (sa === sb && (a.score > b.score || (a.score === b.score && (
+        STRIDE.indexOf(a.category) < STRIDE.indexOf(b.category)
+        || (a.category === b.category && `${a.ruleId}${a.target.id}` <= `${b.ruleId}${b.target.id}`))))),
+      `${a.id} before ${b.id}`);
+    }
   }
 });
 
@@ -141,9 +146,20 @@ test('engine: custom rule bases can target extension properties', () => {
 });
 
 test('engine: exceedsThreshold respects severity order', () => {
-  const report = analyse(loadExample()); // highest finding is High
+  const report = analyse(loadExample(), { scoring: { method: 'mean' } }); // highest finding is High
   assert.equal(exceedsThreshold(report, 'Medium'), true);
   assert.equal(exceedsThreshold(report, 'High'), true);
   assert.equal(exceedsThreshold(report, 'Critical'), false);
+  assert.equal(exceedsThreshold(analyse(loadExample()), 'Critical'), true, 'risk scoring reaches Critical');
   assert.throws(() => exceedsThreshold(report, 'Severe'), /Unknown severity/);
+});
+
+test('scoring: risk matrix spreads the reference model across all four bands', () => {
+  const report = analyse(loadExample());
+  assert.equal(report.scoring.method, 'risk', 'risk is the default');
+  assert.deepEqual(report.summary.bySeverity, { Critical: 2, High: 6, Medium: 6, Low: 2 });
+  const mean = analyse(loadExample(), { scoring: { method: 'mean' } });
+  assert.deepEqual(mean.summary.bySeverity, { Critical: 0, High: 3, Medium: 13, Low: 0 }, 'classic DREAD compresses');
+  assert.equal(report.findings[0].id, 'I-03@product-images');
+  assert.ok(report.findings.every((f) => f.dread.risk && f.dread.risk.likelihoodLevel && f.dread.risk.impactLevel));
 });

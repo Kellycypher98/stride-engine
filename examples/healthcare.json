@@ -1,0 +1,125 @@
+{
+  "name": "Patient Records & Appointments API (AWS hybrid)",
+  "version": "1.0",
+  "description": "Case study 2. FHIR R4 API serving a patient app and clinicians, appointment booking with SMS reminders, HL7 v2 lab feed from an on-premises hospital network over site-to-site VPN, and a pseudonymised research export. Seeded weaknesses are documented in docs/case-studies/healthcare.md and were fixed before the engine was run.",
+  "trustBoundaries": [
+    { "id": "internet", "name": "Public Internet", "level": 0 },
+    { "id": "third-party", "name": "Third-party SaaS / Research Partner", "level": 1 },
+    { "id": "edge", "name": "AWS Edge / Public Endpoints", "level": 1 },
+    { "id": "hospital", "name": "Hospital On-premises Network (via site-to-site VPN)", "level": 2 },
+    { "id": "app", "name": "Application VPC (private subnets)", "level": 2 },
+    { "id": "data", "name": "Data Tier (isolated subnets)", "level": 3 }
+  ],
+  "components": [
+    { "id": "patient", "name": "Patient", "type": "user", "trustBoundary": "internet" },
+    { "id": "it-admin", "name": "IT Administrator (remote)", "type": "user", "trustBoundary": "internet" },
+    { "id": "clinician", "name": "Clinician", "type": "user", "trustBoundary": "hospital" },
+    {
+      "id": "api-gw", "name": "API Gateway", "type": "api", "trustBoundary": "edge",
+      "properties": {
+        "publicFacing": true, "authentication": "oauth", "authorization": true, "inputValidation": true,
+        "logging": true, "rateLimited": true, "waf": true, "leastPrivilege": true, "dependencyScanning": true
+      }
+    },
+    {
+      "id": "auth", "name": "Cognito User Pool", "type": "identity_provider", "trustBoundary": "edge",
+      "properties": { "publicFacing": true, "mfa": true, "dataClassification": "restricted" }
+    },
+    {
+      "id": "admin-console", "name": "Admin Console", "type": "web_app", "trustBoundary": "edge",
+      "description": "Internal user-management and data-correction tool, published to the internet for remote IT staff.",
+      "properties": {
+        "publicFacing": true, "authentication": "basic", "authorization": true, "inputValidation": true,
+        "logging": true, "rateLimited": false, "dependencyScanning": true, "dataClassification": "restricted"
+      }
+    },
+    {
+      "id": "fhir-service", "name": "FHIR R4 Service (ECS Fargate)", "type": "service", "trustBoundary": "app",
+      "properties": {
+        "authentication": "token", "authorization": true, "inputValidation": true, "logging": true,
+        "leastPrivilege": true, "dependencyScanning": true, "dataClassification": "restricted"
+      }
+    },
+    {
+      "id": "appointment-service", "name": "Appointment Service (Lambda)", "type": "function", "trustBoundary": "app",
+      "description": "Checks the caller's token but not that the appointment belongs to the caller.",
+      "properties": {
+        "authentication": "token", "authorization": false, "inputValidation": true, "logging": true,
+        "leastPrivilege": true, "dependencyScanning": true, "dataClassification": "confidential"
+      }
+    },
+    {
+      "id": "notification-service", "name": "Reminder Notification Service (Lambda)", "type": "function", "trustBoundary": "app",
+      "description": "Builds SMS text including patient name, clinic and appointment type.",
+      "properties": {
+        "authentication": "none", "inputValidation": true, "logging": false,
+        "leastPrivilege": false, "dependencyScanning": true, "dataClassification": "confidential"
+      }
+    },
+    {
+      "id": "export-job", "name": "Research Export Job (Lambda, scheduled)", "type": "function", "trustBoundary": "app",
+      "description": "Nightly pseudonymisation and export of encounter data for an approved research partner.",
+      "properties": {
+        "authentication": "none", "inputValidation": true, "logging": true,
+        "leastPrivilege": true, "dependencyScanning": true, "dataClassification": "restricted"
+      }
+    },
+    {
+      "id": "integration-engine", "name": "HL7 Integration Engine", "type": "service", "trustBoundary": "hospital",
+      "description": "Legacy on-premises interface engine translating HL7 v2 lab results into FHIR Observations.",
+      "properties": {
+        "authentication": "none", "inputValidation": false, "logging": true,
+        "leastPrivilege": true, "privileged": true, "dependencyScanning": false, "dataClassification": "restricted"
+      }
+    },
+    { "id": "lab-system", "name": "Laboratory Information System", "type": "external_service", "trustBoundary": "hospital" },
+    {
+      "id": "ehr-db", "name": "EHR Database (RDS PostgreSQL)", "type": "database", "trustBoundary": "data",
+      "properties": { "dataClassification": "restricted", "encryptionAtRest": true, "logging": true, "redundancy": true }
+    },
+    {
+      "id": "documents", "name": "Clinical Documents (S3)", "type": "object_storage", "trustBoundary": "data",
+      "properties": { "dataClassification": "restricted", "encryptionAtRest": true, "logging": false }
+    },
+    {
+      "id": "fhir-cache", "name": "FHIR Response Cache (ElastiCache Redis)", "type": "cache", "trustBoundary": "app",
+      "properties": { "dataClassification": "confidential", "encryptionAtRest": false, "logging": false, "redundancy": false }
+    },
+    {
+      "id": "reminder-queue", "name": "Reminder Queue (SQS)", "type": "queue", "trustBoundary": "data",
+      "properties": { "dataClassification": "confidential", "encryptionAtRest": false, "logging": true, "redundancy": true }
+    },
+    {
+      "id": "research-bucket", "name": "Research Export Bucket (S3)", "type": "object_storage", "trustBoundary": "data",
+      "description": "Pseudonymised encounter data; declared 'internal' by the data owner.",
+      "properties": { "dataClassification": "internal", "encryptionAtRest": true, "logging": true }
+    },
+    {
+      "id": "audit", "name": "CloudTrail + CloudWatch Logs", "type": "monitoring", "trustBoundary": "data",
+      "properties": { "logging": true }
+    },
+    { "id": "sms-provider", "name": "SMS Gateway Provider", "type": "external_service", "trustBoundary": "third-party" },
+    { "id": "research-partner", "name": "University Research Partner", "type": "external_service", "trustBoundary": "third-party" }
+  ],
+  "dataFlows": [
+    { "id": "h01", "from": "patient", "to": "api-gw", "protocol": "https", "authenticated": true, "dataClassification": "restricted" },
+    { "id": "h02", "from": "patient", "to": "auth", "protocol": "https", "dataClassification": "restricted", "description": "Sign-in credentials" },
+    { "id": "h03", "from": "clinician", "to": "api-gw", "protocol": "https", "authenticated": true, "dataClassification": "restricted" },
+    { "id": "h04", "from": "it-admin", "to": "admin-console", "protocol": "https", "authenticated": true, "dataClassification": "restricted" },
+    { "id": "h05", "from": "api-gw", "to": "fhir-service", "protocol": "https", "authenticated": true, "dataClassification": "restricted" },
+    { "id": "h06", "from": "api-gw", "to": "appointment-service", "protocol": "https", "authenticated": true, "dataClassification": "confidential" },
+    { "id": "h07", "from": "fhir-service", "to": "ehr-db", "protocol": "tls", "authenticated": true, "dataClassification": "restricted" },
+    { "id": "h08", "from": "fhir-service", "to": "documents", "protocol": "https", "authenticated": true, "dataClassification": "restricted" },
+    { "id": "h09", "from": "fhir-service", "to": "fhir-cache", "protocol": "tcp", "authenticated": true, "dataClassification": "confidential", "description": "Redis without in-transit encryption" },
+    { "id": "h10", "from": "fhir-service", "to": "audit", "protocol": "https", "authenticated": true, "dataClassification": "internal" },
+    { "id": "h11", "from": "appointment-service", "to": "reminder-queue", "protocol": "https", "authenticated": true, "dataClassification": "confidential" },
+    { "id": "h12", "from": "reminder-queue", "to": "notification-service", "protocol": "https", "authenticated": true, "dataClassification": "confidential" },
+    { "id": "h13", "from": "notification-service", "to": "sms-provider", "protocol": "https", "authenticated": true, "dataClassification": "confidential", "description": "SMS body contains patient name and appointment type" },
+    { "id": "h14", "from": "lab-system", "to": "integration-engine", "protocol": "mllp", "authenticated": false, "dataClassification": "restricted", "description": "HL7 v2 over MLLP, plain TCP" },
+    { "id": "h15", "from": "integration-engine", "to": "fhir-service", "protocol": "https", "authenticated": false, "dataClassification": "restricted", "description": "Trusted because it arrives over the VPN" },
+    { "id": "h16", "from": "admin-console", "to": "ehr-db", "protocol": "tls", "authenticated": true, "dataClassification": "restricted", "description": "Direct database access, bypassing the FHIR service" },
+    { "id": "h17", "from": "export-job", "to": "ehr-db", "protocol": "tls", "authenticated": true, "dataClassification": "restricted" },
+    { "id": "h18", "from": "export-job", "to": "research-bucket", "protocol": "https", "authenticated": true, "dataClassification": "internal" },
+    { "id": "h19", "from": "research-partner", "to": "research-bucket", "protocol": "https", "authenticated": true, "dataClassification": "internal" }
+  ]
+}

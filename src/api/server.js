@@ -52,7 +52,8 @@ const UI_CSP = [
 function loadExamples(dir = EXAMPLES_DIR) {
   const out = new Map();
   for (const file of fs.readdirSync(dir).sort()) {
-    if (path.extname(file) !== '.json') continue;
+    // *.seeded.json files are evaluation keys, not architectures.
+    if (path.extname(file) !== '.json' || file.endsWith('.seeded.json')) continue;
     out.set(path.basename(file, '.json'), JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8')));
   }
   return out;

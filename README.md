@@ -11,7 +11,7 @@ architecture (JSON/YAML) → validate → build views → evaluate STRIDE rules 
 
 ```bash
 npm install
-npm test                                   # 31 tests
+npm test                                   # 37 tests
 node src/cli.js analyze examples/ecommerce.json
 node src/cli.js analyze examples/ecommerce.json --format md --out report.md
 node src/cli.js analyze examples/ecommerce.json --fail-on Critical   # exit 1 → fails the build
@@ -32,6 +32,9 @@ npm start                                  # web UI + REST API on http://localho
 | `src/web/` | Web interface: paste/upload/choose a model, severity summary, architecture diagram, filterable findings, Markdown/JSON download. Plain JS, no third-party front-end code |
 | `src/api/server.js` | Express API (helmet security headers, rate limiting, 1 MB body limit) |
 | `examples/ecommerce.json` | Case study 1: AWS serverless e-commerce platform |
+| `examples/healthcare.json` | Case study 2: FHIR/HL7 healthcare API, hybrid AWS + on-prem ([write-up](docs/case-studies/healthcare.md)) |
+| `examples/*.seeded.json` | Seeded-weakness keys, recorded before first run |
+| `scripts/compare.js` | Recall/precision of findings against a key (seeded or manual STRIDE baseline) |
 
 ## Modelling
 

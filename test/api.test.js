@@ -84,8 +84,23 @@ test('web: UI is served with a same-origin CSP; API routes keep deny-all', async
   assert.match(csp, /script-src 'self'/);
   assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval/);
   assert.match(await page.text(), /stride-engine/);
-  assert.equal((await fetch(`${base}/app.js`)).status, 200);
+  const html = await (await fetch(`${base}/`)).text();
+  assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)[^>]*>/, 'no inline scripts (CSP has no unsafe-inline)');
+  for (const asset of html.match(/(?:src|href)="\.\/assets\/[^"]+"/g)) {
+    const res = await fetch(`${base}/${asset.split('"')[1].slice(2)}`);
+    assert.equal(res.status, 200, `${asset} is served from the same origin`);
+  }
   assert.equal((await fetch(`${base}/health`)).headers.get('content-security-policy'), "default-src 'none';frame-ancestors 'none'");
+});
+
+test('api: include=architecture adds the validated model for the diagram; default report unchanged', async () => {
+  const plain = await (await post('/analyze', loadExample())).json();
+  assert.equal(plain.architecture, undefined);
+  const withArch = await (await post('/analyze?include=architecture', loadExample())).json();
+  assert.equal(withArch.architecture.components.length, loadExample().components.length);
+  assert.ok(withArch.architecture.dataFlows.every((f) => typeof f.encrypted === 'boolean'), 'validated (encryption derived)');
+  const { architecture, ...rest } = withArch;
+  assert.deepEqual(rest, plain);
 });
 
 test('api: examples are listed and served; unknown names and traversal attempts are 404', async () => {

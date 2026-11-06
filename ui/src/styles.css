@@ -1,0 +1,169 @@
+@import "@fontsource/atkinson-hyperlegible/latin-400.css";
+@import "@fontsource/atkinson-hyperlegible/latin-400-italic.css";
+@import "@fontsource/atkinson-hyperlegible/latin-700.css";
+@import "@fontsource/jetbrains-mono/latin-400.css";
+@import "tailwindcss";
+
+/*
+ * Visual language: data-flow-diagram notation. External entities are squared
+ * boxes, processes are capsules, data stores are open-ended boxes, and trust
+ * boundaries are dashed violet lines. Severity colour is reserved for threats;
+ * violet is reserved for trust boundaries.
+ *
+ * Colours are CSS variables that switch with the OS colour scheme, exposed to
+ * Tailwind as theme colours (bg-paper, text-ink-2, border-grid, ...).
+ */
+
+:root {
+  --paper: #f3f5f4;
+  --sheet: #fbfcfb;
+  --ink: #17201d;
+  --ink-2: #4b5853;
+  --grid: #cdd5d1;
+  --grid-soft: #e3e8e5;
+  --boundary: #6b4fbb;
+  --action: #0e5a57;
+  --action-ink: #ffffff;
+  --critical: #b42318;
+  --high: #c2561a;
+  --medium: #a07612;
+  --low: #3f639c;
+  --critical-wash: #f9e2df;
+  --high-wash: #fbe7da;
+  --medium-wash: #f6edd2;
+  --low-wash: #e2e9f4;
+  --badge-ink: #ffffff;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #121816;
+    --sheet: #171f1c;
+    --ink: #e3eae6;
+    --ink-2: #9fada7;
+    --grid: #33403b;
+    --grid-soft: #222c28;
+    --boundary: #ab98f2;
+    --action: #5fc2b9;
+    --action-ink: #0c1412;
+    --critical: #ff8a7a;
+    --high: #f4a066;
+    --medium: #e3c25a;
+    --low: #8fb0e8;
+    --critical-wash: #3b1c19;
+    --high-wash: #3a2618;
+    --medium-wash: #342c14;
+    --low-wash: #1c2738;
+    --badge-ink: #0c1412;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --font-sans: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  --color-paper: var(--paper);
+  --color-sheet: var(--sheet);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-grid: var(--grid);
+  --color-grid-soft: var(--grid-soft);
+  --color-boundary: var(--boundary);
+  --color-action: var(--action);
+  --color-action-ink: var(--action-ink);
+  --color-critical: var(--critical);
+  --color-high: var(--high);
+  --color-medium: var(--medium);
+  --color-low: var(--low);
+  --color-critical-wash: var(--critical-wash);
+  --color-high-wash: var(--high-wash);
+  --color-medium-wash: var(--medium-wash);
+  --color-low-wash: var(--low-wash);
+
+  /* Type scale: 13 / 15 / 18 / 24 / 48 */
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+  --text-glyph: 3rem;
+}
+
+@layer base {
+  html, body { background: var(--paper); color: var(--ink); }
+  body { font-family: var(--font-sans); font-size: var(--text-sm); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  :focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+  button { cursor: pointer; }
+  select {
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--ink-2) 50%), linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
+    background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%;
+    background-size: 5px 5px;
+    background-repeat: no-repeat;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex min-h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-grid bg-sheet px-3.5 hover:border-ink-2;
+  }
+  .btn-primary { @apply border-action bg-action font-bold text-action-ink hover:border-action hover:brightness-110 disabled:cursor-progress disabled:opacity-60; }
+  .btn-quiet { @apply border-transparent bg-transparent text-ink-2 hover:border-grid hover:text-ink; }
+  .field { @apply min-h-9 max-w-[340px] rounded-md border border-grid bg-sheet pr-8 pl-2.5 text-ink; }
+  .toggle { @apply rounded-md border border-transparent text-left hover:border-grid aria-pressed:border-ink aria-pressed:bg-sheet; }
+
+  .bg-sev-Critical { background: var(--critical); }
+  .bg-sev-High { background: var(--high); }
+  .bg-sev-Medium { background: var(--medium); }
+  .bg-sev-Low { background: var(--low); }
+}
+
+/* ---------------------------------------------------------------- diagram (SVG) */
+
+.dfd .zone-label { font: 700 13px var(--font-sans); fill: var(--boundary); }
+.dfd .zone-level { font: 400 12px var(--font-sans); fill: var(--ink-2); }
+.dfd .boundary { stroke: var(--boundary); stroke-width: 1.5; stroke-dasharray: 6 5; }
+
+.dfd .flow { fill: none; stroke: var(--grid); stroke-width: 1.4; }
+.dfd .flow.has { stroke-width: 2; }
+.dfd .flow.sev-Critical { stroke: var(--critical); }
+.dfd .flow.sev-High { stroke: var(--high); }
+.dfd .flow.sev-Medium { stroke: var(--medium); }
+.dfd .flow.sev-Low { stroke: var(--low); }
+.dfd .flow.lit { stroke-width: 3; }
+.dfd .arrowhead { fill: var(--ink-2); }
+.dfd .fill-Critical { fill: var(--critical); }
+.dfd .fill-High { fill: var(--high); }
+.dfd .fill-Medium { fill: var(--medium); }
+.dfd .fill-Low { fill: var(--low); }
+
+.dfd .node { cursor: pointer; }
+.dfd .node .shape { fill: var(--sheet); stroke: var(--ink-2); stroke-width: 1.4; }
+.dfd .node .store-line { fill: none; stroke: var(--ink-2); stroke-width: 1.6; }
+.dfd .node .store-fill { fill: var(--sheet); }
+.dfd .node .name { font: 700 13px var(--font-sans); fill: var(--ink); }
+.dfd .node .type { font: 400 12px var(--font-sans); fill: var(--ink-2); }
+.dfd .node:hover .shape, .dfd .node:hover .store-line { stroke: var(--ink); }
+.dfd .node:focus { outline: none; }
+.dfd .node:focus-visible .shape, .dfd .node:focus-visible .store-line,
+.dfd .node.selected .shape, .dfd .node.selected .store-line { stroke: var(--action); stroke-width: 2.5; }
+.dfd .badge { stroke: var(--sheet); stroke-width: 2; }
+.dfd .badge-n { font: 700 11px var(--font-sans); fill: var(--badge-ink); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+
+.dfd.dim .flow, .dfd.dim .node { opacity: .22; }
+.dfd.dim .lit { opacity: 1; }
+
+.dfd .node.pulse .shape, .dfd .node.pulse .store-line { animation: pulse 1s ease-out 1; }
+@keyframes pulse { 0% { stroke-width: 6; } 100% { stroke-width: 2.5; } }
+
+.dfd-canvas { cursor: grab; touch-action: none; }
+.dfd-canvas:active { cursor: grabbing; }
+
+.drawer-in { animation: drawer-in .18s ease-out; }
+@keyframes drawer-in { from { transform: translateX(-24px); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

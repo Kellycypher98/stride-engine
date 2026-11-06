@@ -3,12 +3,14 @@
 /**
  * REST API.
  *
- *   GET  /                             web interface (static, src/web)
+ *   GET  /                             web interface (React build in dist/web; source in ui/)
  *   GET  /health                       liveness
  *   GET  /rules                        loaded rule base
  *   GET  /examples                     names of bundled example architectures
  *   GET  /examples/:name               one example architecture
- *   POST /analyze?scoring=&format=     body: architecture JSON or YAML → report
+ *   POST /analyze?scoring=&format=&include=architecture
+ *                                      body: architecture JSON or YAML → report
+ *                                      (include=architecture adds the validated model, for the UI diagram)
  *
  * 200 report · 400 bad request · 413 too large · 422 architecture invalid
  * 429 rate limited · 500 internal error
@@ -26,12 +28,12 @@ const yaml = require('js-yaml');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { analyse, loadRules } = require('../engine');
-const { ValidationError } = require('../schema/architecture');
+const { ValidationError, validateArchitecture } = require('../schema/architecture');
 const { render } = require('../report/format');
 const { METHODS } = require('../engine/dread');
 
 const DEFAULT_RATE_LIMIT = Object.freeze({ windowMs: 60_000, limit: 60 });
-const WEB_DIR = path.join(__dirname, '..', 'web');
+const WEB_DIR = path.join(__dirname, '..', '..', 'dist', 'web');
 const EXAMPLES_DIR = path.join(__dirname, '..', '..', 'examples');
 const YAML_TYPES = ['application/yaml', 'application/x-yaml', 'text/yaml'];
 
@@ -119,6 +121,7 @@ function createApp({ rules = loadRules(), rateLimit: rl = DEFAULT_RATE_LIMIT, tr
       }
       const report = analyse(model, { rules, scoring });
       if (format === 'md') return res.type('text/markdown').send(render(report, 'md'));
+      if (req.query.include === 'architecture') return res.json({ ...report, architecture: validateArchitecture(model) });
       return res.json(report);
     } catch (e) {
       if (e instanceof ValidationError) return res.status(422).json({ error: 'invalid architecture', details: e.details });

@@ -11,11 +11,12 @@ architecture (JSON/YAML) → validate → build views → evaluate STRIDE rules 
 
 ```bash
 npm install
-npm test                                   # 40 tests
+npm test                                   # 44 tests (builds the UI first)
 node src/cli.js analyze examples/ecommerce.json
 node src/cli.js analyze examples/ecommerce.json --format md --out report.md
 node src/cli.js analyze examples/ecommerce.json --fail-on Critical   # exit 1 → fails the build
-npm start                                  # web UI + REST API on http://localhost:3000
+npm start                                  # builds the UI, then web UI + REST API on http://localhost:3000
+npm run dev:ui                             # UI dev server with hot reload (run npm start alongside)
 ```
 
 ## Layout
@@ -29,7 +30,7 @@ npm start                                  # web UI + REST API on http://localho
 | `src/rules/stride.rules.json` | 18 rules, 3 per STRIDE category, with CWE/OWASP/AWS Well-Architected references |
 | `src/report/format.js` | JSON, Markdown and text renderers |
 | `src/cli.js` | CLI with `--fail-on` gating |
-| `src/web/` | Web interface: paste/upload/choose a model, severity summary, architecture diagram, filterable findings, Markdown/JSON download. Plain JS, no third-party front-end code |
+| `ui/` | Web interface (React, Tailwind CSS, D3): data flow diagram in DFD notation with threats pinned to components and flows, STRIDE and severity filters, threat inspector with the OWASP likelihood × impact matrix and DREAD breakdown, model editor (JSON/YAML), Markdown/JSON export. Built by Vite into `dist/web`, which the API serves |
 | `src/api/server.js` | Express API (helmet security headers, rate limiting, 1 MB body limit) |
 | `examples/ecommerce.json` | Case study 1: AWS serverless e-commerce platform |
 | `examples/healthcare.json` | Case study 2: FHIR/HL7 healthcare API, hybrid AWS + on-prem ([write-up](docs/case-studies/healthcare.md)) |

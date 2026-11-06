@@ -24,6 +24,7 @@ const Joi = require('joi');
 const { validateArchitecture, KINDS, DATA_CLASSIFICATIONS } = require('../schema/architecture');
 const { compilePredicate, evaluate } = require('./predicate');
 const { scoreThreat, normaliseScoring, DIMENSIONS, SEVERITY_ORDER } = require('./dread');
+const { modelWarnings } = require('./warnings');
 const pkg = require('../../package.json');
 
 const STRIDE = Object.freeze([
@@ -262,6 +263,7 @@ function analyse(input, options = {}) {
         strideCategoriesHit: STRIDE.filter((c) => byCategory[c] > 0).length,
       },
     },
+    warnings: modelWarnings(arch, ruleBase),
     findings,
   };
 }

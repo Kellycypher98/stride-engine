@@ -1,0 +1,277 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Kellycypher98/stride-engine/master/schema/architecture.schema.json",
+  "title": "stride-engine architecture model",
+  "description": "Describe your system as trust boundaries, components and data flows. Controls you do not declare are treated as missing.",
+  "type": "object",
+  "required": [
+    "name",
+    "trustBoundaries",
+    "components"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string",
+      "description": "Name of the system being modelled."
+    },
+    "version": {
+      "type": "string",
+      "description": "Version of this model, e.g. \"1.0\"."
+    },
+    "description": {
+      "type": "string"
+    },
+    "trustBoundaries": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Zones of equal trust. Data crossing from one zone to another is where most threats appear.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "level"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "maxLength": 64,
+            "description": "Unique id, referenced by components."
+          },
+          "name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10,
+            "description": "How trusted the zone is: 0 is the public internet; higher is more trusted (e.g. 1 edge, 2 private app subnets, 3 isolated data tier)."
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Everything that processes, stores or sends data, plus the people and outside systems that use it.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "type",
+          "trustBoundary"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "maxLength": 64,
+            "description": "Unique id, referenced by data flows."
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "user",
+              "web_app",
+              "api",
+              "service",
+              "function",
+              "database",
+              "object_storage",
+              "cache",
+              "queue",
+              "identity_provider",
+              "cdn",
+              "load_balancer",
+              "monitoring",
+              "external_service"
+            ],
+            "markdownEnumDescriptions": [
+              "A person who uses the system (customer, employee, administrator).",
+              "A web front end or backend-for-frontend that serves pages to browsers.",
+              "An API endpoint or gateway that other clients call (e.g. API Gateway, a REST service edge).",
+              "A long-running backend service or container (e.g. ECS, EKS pod, EC2 app).",
+              "A serverless function (e.g. AWS Lambda).",
+              "A database (e.g. RDS, Aurora, DynamoDB).",
+              "File or object storage (e.g. S3, a container registry).",
+              "An in-memory cache (e.g. ElastiCache Redis).",
+              "A message queue or event bus (e.g. SQS, SNS, Kafka).",
+              "A sign-in service (e.g. Cognito, Auth0, Okta).",
+              "A content delivery network (e.g. CloudFront).",
+              "A load balancer or ingress (e.g. ALB, NLB).",
+              "Central logging or security monitoring (e.g. CloudTrail + CloudWatch, a SIEM). Add one if you have it.",
+              "A third-party system you do not run (payment provider, SaaS, a partner or bank)."
+            ]
+          },
+          "trustBoundary": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "maxLength": 64,
+            "description": "Id of the trust boundary this component sits in."
+          },
+          "description": {
+            "type": "string"
+          },
+          "properties": {
+            "type": "object",
+            "description": "Security controls this component has. Anything you leave out is treated as missing.",
+            "properties": {
+              "publicFacing": {
+                "description": "true if it can be reached directly from the internet (public endpoint, public bucket, public IP).",
+                "type": "boolean"
+              },
+              "authentication": {
+                "description": "How callers prove who they are: none, basic, api_key, token, oauth or mtls.",
+                "enum": [
+                  "none",
+                  "basic",
+                  "api_key",
+                  "token",
+                  "oauth",
+                  "mtls"
+                ]
+              },
+              "authorization": {
+                "description": "true if every request is checked against what this caller may access (per object and per function), not just that they are signed in.",
+                "type": "boolean"
+              },
+              "mfa": {
+                "description": "Identity providers only: true if multi-factor authentication is enforced.",
+                "type": "boolean"
+              },
+              "inputValidation": {
+                "description": "true if all input is validated against an allow-list schema before use.",
+                "type": "boolean"
+              },
+              "logging": {
+                "description": "true if security-relevant actions (or, for data stores, data access) are logged centrally.",
+                "type": "boolean"
+              },
+              "rateLimited": {
+                "description": "true if requests are throttled per client.",
+                "type": "boolean"
+              },
+              "encryptionAtRest": {
+                "description": "Data stores: true if stored data is encrypted (e.g. KMS-managed keys).",
+                "type": "boolean"
+              },
+              "dataClassification": {
+                "description": "The most sensitive data it holds: public, internal, confidential or restricted.",
+                "enum": [
+                  "public",
+                  "internal",
+                  "confidential",
+                  "restricted"
+                ],
+                "markdownEnumDescriptions": [
+                  "Meant to be public (marketing pages, product images).",
+                  "Not public, but low harm if leaked (internal ids, configuration).",
+                  "Harmful if leaked (orders, customer contact details, business data).",
+                  "Severe harm if leaked: credentials, payment data, health data, government ids."
+                ]
+              },
+              "leastPrivilege": {
+                "description": "true if its IAM role or service account has only the permissions it needs.",
+                "type": "boolean"
+              },
+              "privileged": {
+                "description": "true if it runs as root or in a privileged container.",
+                "type": "boolean"
+              },
+              "dependencyScanning": {
+                "description": "true if its build scans third-party dependencies (npm audit, Snyk, Dependabot).",
+                "type": "boolean"
+              },
+              "redundancy": {
+                "description": "Databases, queues and caches: true if deployed across availability zones or replicated.",
+                "type": "boolean"
+              },
+              "waf": {
+                "description": "true if a web application firewall sits in front of it.",
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "dataFlows": {
+      "type": "array",
+      "description": "Data moving from one component to another.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "from",
+          "to",
+          "protocol"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "maxLength": 64,
+            "description": "Unique id for this data flow, e.g. \"f1\"."
+          },
+          "from": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "maxLength": 64,
+            "description": "Id of the component that sends the data."
+          },
+          "to": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "maxLength": 64,
+            "description": "Id of the component that receives the data."
+          },
+          "protocol": {
+            "type": "string",
+            "description": "e.g. https, tls, grpc, grpcs, tcp, sftp, mllp. https, tls, grpcs, mtls, wss and sftp count as encrypted."
+          },
+          "encrypted": {
+            "type": "boolean",
+            "description": "Override whether the channel is encrypted. Leave it out to derive it from the protocol."
+          },
+          "authenticated": {
+            "type": "boolean",
+            "description": "true if the receiver authenticates the sender on this flow. Defaults to false."
+          },
+          "dataClassification": {
+            "description": "Most sensitive data on this flow: public, internal, confidential or restricted. Defaults to internal.",
+            "enum": [
+              "public",
+              "internal",
+              "confidential",
+              "restricted"
+            ],
+            "markdownEnumDescriptions": [
+              "Meant to be public (marketing pages, product images).",
+              "Not public, but low harm if leaked (internal ids, configuration).",
+              "Harmful if leaked (orders, customer contact details, business data).",
+              "Severe harm if leaked: credentials, payment data, health data, government ids."
+            ]
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional note shown in tooltips and reports."
+          }
+        }
+      }
+    }
+  }
+}

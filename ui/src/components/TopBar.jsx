@@ -1,7 +1,7 @@
 import { CUSTOM } from '../constants.js';
 
 export default function TopBar({
-  examples, example, onExample, scoring, onScoring, drawerOpen, onEdit, canExport, onMarkdown, onJson,
+  examples, example, onExample, scoring, onScoring, drawerOpen, onEdit, canExport, onMarkdown, onJson, onHelp,
 }) {
   return (
     <header className="z-20 flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-grid bg-paper px-[clamp(16px,3vw,32px)] py-2.5 sm:sticky sm:top-0">
@@ -25,6 +25,8 @@ export default function TopBar({
           </select>
         </label>
       </div>
+
+      <button type="button" className="btn btn-quiet" onClick={onHelp}>How it works</button>
 
       {canExport && (
         <div className="flex gap-1">

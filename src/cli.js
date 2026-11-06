@@ -4,6 +4,8 @@
 /**
  * stride-engine CLI — designed to run as a CI/CD security gate.
  *
+ *   stride-engine init [--out <file>]                 write a commented starter model
+ *   stride-engine validate <architecture.json|yaml>   check a model without analysing it
  *   stride-engine analyze <architecture.json|yaml> [options]
  *   stride-engine rules [--rules <file>]
  *
@@ -26,13 +28,18 @@ const path = require('node:path');
 const yaml = require('js-yaml');
 
 const { analyse, loadRules, exceedsThreshold, DEFAULT_RULES_PATH } = require('./engine');
-const { ValidationError } = require('./schema/architecture');
+const { ValidationError, validateArchitecture } = require('./schema/architecture');
+const { modelWarnings } = require('./engine/warnings');
 const { SEVERITY_ORDER } = require('./engine/dread');
 const { render } = require('./report/format');
 
 const EXIT = { OK: 0, THRESHOLD: 1, INVALID: 2, ERROR: 3 };
 
+const STARTER = path.join(__dirname, '..', 'templates', 'starter.yaml');
+
 const USAGE = `Usage:
+  stride-engine init [--out threat-model.yaml]       write a commented starter model
+  stride-engine validate <architecture.json|yaml>    check a model, show warnings
   stride-engine analyze <architecture.json|yaml> [--format json|md|text] [--out file]
                         [--fail-on Low|Medium|High|Critical] [--scoring risk|mean|weighted] [--rules file]
   stride-engine rules [--rules file]`;
@@ -80,7 +87,26 @@ function main(argv, io = { stdout: process.stdout, stderr: process.stderr }) {
   }
 
   try {
+    if (command === 'init') {
+      const starter = fs.readFileSync(STARTER, 'utf8');
+      if (!args.out) { io.stdout.write(starter); return EXIT.OK; }
+      if (fs.existsSync(args.out)) throw new Error(`${args.out} already exists; choose another --out or delete it first`);
+      fs.writeFileSync(args.out, starter);
+      io.stderr.write(`Wrote ${args.out}. Describe your system in it, then run: stride-engine analyze ${args.out}\n`);
+      return EXIT.OK;
+    }
+
     const rules = loadRules(args.rules || DEFAULT_RULES_PATH);
+
+    if (command === 'validate') {
+      if (!file) throw new Error(`validate requires an architecture file\n${USAGE}`);
+      const arch = validateArchitecture(readArchitecture(file));
+      const warnings = modelWarnings(arch, rules);
+      for (const w of warnings) io.stderr.write(`warning: ${w.message}\n`);
+      io.stdout.write(`${file} is valid: ${arch.components.length} components, ${arch.dataFlows.length} data flows, `
+        + `${arch.trustBoundaries.length} trust boundaries${warnings.length ? `, ${warnings.length} warning(s)` : ''}.\n`);
+      return EXIT.OK;
+    }
 
     if (command === 'rules') {
       for (const r of rules.rules) io.stdout.write(`${r.id}  ${r.category.padEnd(22)} ${r.appliesTo.padEnd(9)} ${r.title}\n`);
@@ -91,7 +117,10 @@ function main(argv, io = { stdout: process.stdout, stderr: process.stderr }) {
 
     const failOn = args['fail-on'] ? normaliseSeverity(args['fail-on']) : null;
     const report = analyse(readArchitecture(file), { rules, scoring: { method: args.scoring } });
-    const output = render(report, args.format || 'text');
+    const format = args.format || 'text';
+    const output = render(report, format);
+    // Text output already lists warnings; for json/md also surface them in the build log.
+    if (format !== 'text') for (const w of report.warnings) io.stderr.write(`warning: ${w.message}\n`);
 
     if (args.out) fs.writeFileSync(args.out, output);
     else io.stdout.write(output);

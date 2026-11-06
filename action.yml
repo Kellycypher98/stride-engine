@@ -1,0 +1,61 @@
+name: stride-engine threat model
+description: STRIDE threat modelling with DREAD risk scoring. Fails the build when threats at or above a severity are found.
+author: Kelvin Osei Boateng
+branding:
+  icon: shield
+  color: purple
+
+inputs:
+  model:
+    description: Path to the architecture model (JSON or YAML), relative to the repository root.
+    required: true
+  fail-on:
+    description: Fail the job if any threat is at or above this severity (Low, Medium, High, Critical). Set to "none" to only report.
+    default: High
+  scoring:
+    description: risk (likelihood × impact), mean or weighted.
+    default: risk
+  report:
+    description: Where to write the Markdown report.
+    default: threat-report.md
+
+outputs:
+  total:
+    description: Number of threats found.
+    value: ${{ steps.analyse.outputs.total }}
+  highest:
+    description: Highest severity found, or "none".
+    value: ${{ steps.analyse.outputs.highest }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Install stride-engine
+      shell: bash
+      run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH"
+
+    - id: analyse
+      name: Analyse threat model
+      shell: bash
+      env:
+        MODEL: ${{ inputs.model }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        SCORING: ${{ inputs.scoring }}
+        REPORT: ${{ inputs.report }}
+      run: |
+        set +e
+        CLI="$GITHUB_ACTION_PATH/src/cli.js"
+        GATE=()
+        if [ "$FAIL_ON" != "none" ]; then GATE=(--fail-on "$FAIL_ON"); fi
+        node "$CLI" analyze "$MODEL" --scoring "$SCORING" --format md --out "$REPORT" "${GATE[@]}"
+        code=$?
+        if [ -f "$REPORT" ]; then
+          cat "$REPORT" >> "$GITHUB_STEP_SUMMARY"
+          node "$CLI" analyze "$MODEL" --scoring "$SCORING" --format json --out "$RUNNER_TEMP/stride.json" 2>/dev/null
+          node -e 'const r=require(process.argv[1]);console.log(`total=${r.summary.total}`);console.log(`highest=${r.summary.highestSeverity||"none"}`)' "$RUNNER_TEMP/stride.json" >> "$GITHUB_OUTPUT"
+        fi
+        exit $code

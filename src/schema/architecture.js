@@ -102,6 +102,7 @@ const dataFlow = Joi.object({
 });
 
 const architectureSchema = Joi.object({
+  $schema: Joi.string(), // editor hint (JSON Schema URL); ignored by the engine
   name: Joi.string().required(),
   version: Joi.string().default('1.0'),
   description: Joi.string().allow(''),

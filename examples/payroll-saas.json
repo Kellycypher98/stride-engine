@@ -1,0 +1,117 @@
+{
+  "name": "Multi-tenant Payroll SaaS (EKS + CI/CD)",
+  "version": "1.0",
+  "description": "Case study 3. Multi-tenant payroll platform on Amazon EKS behind an ALB with WAF. Kafka event bus, payslip generation, a bank payment connector over SFTP, and inbound bank webhooks. The CI/CD pipeline (GitHub, self-hosted runner, ECR) is modelled as part of the attack surface. Seeded weaknesses are documented in docs/case-studies/payroll-saas.md and were fixed before the engine was run.",
+  "trustBoundaries": [
+    { "id": "internet", "name": "Public Internet", "level": 0 },
+    { "id": "third-party", "name": "Third-party SaaS / Bank", "level": 1 },
+    { "id": "edge", "name": "AWS Edge / Public Endpoints", "level": 1 },
+    { "id": "cicd", "name": "Build Account (CI/CD)", "level": 2 },
+    { "id": "cluster", "name": "EKS Cluster (private subnets)", "level": 2 },
+    { "id": "data", "name": "Data Tier (isolated subnets)", "level": 3 }
+  ],
+  "components": [
+    { "id": "employee", "name": "Employee", "type": "user", "trustBoundary": "internet" },
+    { "id": "hr-admin", "name": "Tenant HR Administrator", "type": "user", "trustBoundary": "internet" },
+    { "id": "developer", "name": "Platform Developer", "type": "user", "trustBoundary": "internet" },
+    {
+      "id": "alb", "name": "Application Load Balancer + WAF", "type": "load_balancer", "trustBoundary": "edge",
+      "properties": { "publicFacing": true, "waf": true, "rateLimited": true, "logging": true }
+    },
+    {
+      "id": "webhook-receiver", "name": "Bank Webhook Receiver (Lambda URL)", "type": "function", "trustBoundary": "edge",
+      "description": "Receives payment status callbacks; verifies a static shared API key, not a signature.",
+      "properties": {
+        "publicFacing": true, "authentication": "api_key", "authorization": true, "inputValidation": true,
+        "logging": true, "rateLimited": false, "leastPrivilege": true, "dependencyScanning": true, "dataClassification": "confidential"
+      }
+    },
+    {
+      "id": "web-app", "name": "Web Frontend (BFF)", "type": "web_app", "trustBoundary": "cluster",
+      "properties": {
+        "authentication": "oauth", "authorization": true, "inputValidation": true, "logging": true,
+        "dependencyScanning": true, "dataClassification": "restricted"
+      }
+    },
+    {
+      "id": "tenant-api", "name": "Tenant API", "type": "api", "trustBoundary": "cluster",
+      "description": "Serves all tenants from one shared schema; isolation is a tenant_id filter in application queries.",
+      "properties": {
+        "authentication": "oauth", "authorization": true, "inputValidation": true, "logging": true,
+        "leastPrivilege": true, "dependencyScanning": true, "dataClassification": "restricted"
+      }
+    },
+    {
+      "id": "payroll-engine", "name": "Payroll Calculation Engine", "type": "service", "trustBoundary": "cluster",
+      "properties": {
+        "authentication": "mtls", "authorization": true, "inputValidation": true, "logging": true,
+        "leastPrivilege": true, "dependencyScanning": false, "dataClassification": "restricted"
+      }
+    },
+    {
+      "id": "report-service", "name": "Payslip PDF Service", "type": "service", "trustBoundary": "cluster",
+      "description": "Renders tenant-supplied HTML templates to PDF with a headless browser that can fetch remote URLs.",
+      "properties": {
+        "authentication": "token", "authorization": true, "inputValidation": false, "logging": true,
+        "leastPrivilege": true, "dependencyScanning": true, "dataClassification": "restricted"
+      }
+    },
+    {
+      "id": "bank-connector", "name": "Bank Payment Connector", "type": "service", "trustBoundary": "cluster",
+      "properties": {
+        "authentication": "none", "inputValidation": true, "logging": false,
+        "leastPrivilege": true, "dependencyScanning": true, "dataClassification": "restricted"
+      }
+    },
+    {
+      "id": "event-bus", "name": "Payroll Event Bus (MSK Kafka)", "type": "queue", "trustBoundary": "cluster",
+      "properties": { "dataClassification": "confidential", "encryptionAtRest": true, "logging": false, "redundancy": false }
+    },
+    {
+      "id": "tenant-db", "name": "Tenant Database (Aurora PostgreSQL)", "type": "database", "trustBoundary": "data",
+      "properties": { "dataClassification": "restricted", "encryptionAtRest": true, "logging": true, "redundancy": true }
+    },
+    {
+      "id": "payslip-bucket", "name": "Payslip Store (S3)", "type": "object_storage", "trustBoundary": "data",
+      "properties": { "dataClassification": "restricted", "encryptionAtRest": true, "logging": true }
+    },
+    {
+      "id": "ci-runner", "name": "Self-hosted CI Runner (EC2)", "type": "service", "trustBoundary": "cicd",
+      "description": "Builds images with Docker-in-Docker and runs database migrations against production. Also triggered by pull requests from forks.",
+      "properties": {
+        "authentication": "token", "authorization": true, "inputValidation": true, "logging": true,
+        "leastPrivilege": false, "privileged": true, "dependencyScanning": true, "dataClassification": "restricted"
+      }
+    },
+    {
+      "id": "registry", "name": "Container Registry (ECR)", "type": "object_storage", "trustBoundary": "cicd",
+      "description": "Images are tagged but not signed; the cluster does not verify provenance.",
+      "properties": { "dataClassification": "internal", "encryptionAtRest": true, "logging": false }
+    },
+    { "id": "github", "name": "GitHub (source + Actions)", "type": "external_service", "trustBoundary": "third-party" },
+    { "id": "bank-sftp", "name": "Bank SFTP Gateway", "type": "external_service", "trustBoundary": "third-party" },
+    { "id": "email-provider", "name": "Transactional Email Provider", "type": "external_service", "trustBoundary": "third-party" }
+  ],
+  "dataFlows": [
+    { "id": "p01", "from": "employee", "to": "alb", "protocol": "https", "authenticated": true, "dataClassification": "confidential" },
+    { "id": "p02", "from": "hr-admin", "to": "alb", "protocol": "https", "authenticated": true, "dataClassification": "restricted" },
+    { "id": "p03", "from": "alb", "to": "web-app", "protocol": "https", "authenticated": true, "dataClassification": "restricted" },
+    { "id": "p04", "from": "web-app", "to": "tenant-api", "protocol": "http", "authenticated": true, "dataClassification": "restricted", "description": "Plain HTTP inside the cluster; no service mesh" },
+    { "id": "p05", "from": "tenant-api", "to": "tenant-db", "protocol": "tls", "authenticated": true, "dataClassification": "restricted" },
+    { "id": "p06", "from": "tenant-api", "to": "event-bus", "protocol": "tls", "authenticated": true, "dataClassification": "confidential" },
+    { "id": "p07", "from": "event-bus", "to": "payroll-engine", "protocol": "tls", "authenticated": true, "dataClassification": "confidential" },
+    { "id": "p08", "from": "payroll-engine", "to": "tenant-db", "protocol": "tls", "authenticated": true, "dataClassification": "restricted" },
+    { "id": "p09", "from": "payroll-engine", "to": "report-service", "protocol": "grpcs", "authenticated": true, "dataClassification": "restricted" },
+    { "id": "p10", "from": "report-service", "to": "payslip-bucket", "protocol": "https", "authenticated": true, "dataClassification": "restricted" },
+    { "id": "p11", "from": "payroll-engine", "to": "bank-connector", "protocol": "grpc", "authenticated": false, "dataClassification": "restricted", "description": "Payment batch with IBANs over plaintext gRPC" },
+    { "id": "p12", "from": "bank-connector", "to": "bank-sftp", "protocol": "sftp", "authenticated": true, "dataClassification": "restricted" },
+    { "id": "p13", "from": "report-service", "to": "email-provider", "protocol": "https", "authenticated": true, "dataClassification": "confidential" },
+    { "id": "p14", "from": "bank-sftp", "to": "webhook-receiver", "protocol": "https", "authenticated": true, "dataClassification": "confidential" },
+    { "id": "p15", "from": "webhook-receiver", "to": "tenant-api", "protocol": "https", "authenticated": false, "dataClassification": "confidential", "description": "Internal callback endpoint with no service authentication" },
+    { "id": "p16", "from": "developer", "to": "github", "protocol": "https", "authenticated": true, "dataClassification": "internal" },
+    { "id": "p17", "from": "github", "to": "ci-runner", "protocol": "https", "authenticated": true, "dataClassification": "internal", "description": "Workflow jobs, including from fork pull requests" },
+    { "id": "p18", "from": "ci-runner", "to": "registry", "protocol": "https", "authenticated": true, "dataClassification": "internal" },
+    { "id": "p19", "from": "registry", "to": "payroll-engine", "protocol": "https", "authenticated": true, "dataClassification": "internal", "description": "Image pull at deploy time" },
+    { "id": "p20", "from": "ci-runner", "to": "tenant-db", "protocol": "tls", "authenticated": true, "dataClassification": "restricted", "description": "Schema migrations with production credentials" }
+  ]
+}

@@ -7,11 +7,32 @@ MSc Cybersecurity thesis artefact (Design Science Research), Arden University.
 architecture (JSON/YAML) → validate → build views → evaluate STRIDE rules → DREAD score → sorted report
 ```
 
+## Use it on your own system
+
+```bash
+npx github:Kellycypher98/stride-engine init --out threat-model.yaml   # commented starter model
+npx github:Kellycypher98/stride-engine validate threat-model.yaml     # mistakes and warnings
+npx github:Kellycypher98/stride-engine analyze threat-model.yaml      # threats, highest risk first
+```
+
+In GitHub Actions:
+
+```yaml
+- uses: Kellycypher98/stride-engine@master
+  with:
+    model: threat-model.yaml
+    fail-on: High
+```
+
+Read the [modelling guide](docs/modelling-guide.md) first (about 15 minutes). Every field is listed in the
+[model reference](docs/model-reference.md). The [JSON Schema](schema/architecture.schema.json) gives
+autocomplete and inline errors in VS Code and JetBrains editors.
+
 ## Quick start
 
 ```bash
 npm install
-npm test                                   # 44 tests (builds the UI first)
+npm test                                   # 55 tests (builds the UI first)
 node src/cli.js analyze examples/ecommerce.json
 node src/cli.js analyze examples/ecommerce.json --format md --out report.md
 node src/cli.js analyze examples/ecommerce.json --fail-on Critical   # exit 1 → fails the build
@@ -32,6 +53,9 @@ npm run dev:ui                             # UI dev server with hot reload (run 
 | `src/cli.js` | CLI with `--fail-on` gating |
 | `ui/` | Web interface (React, Tailwind CSS, D3): data flow diagram in DFD notation with threats pinned to components and flows, STRIDE and severity filters, threat inspector with the OWASP likelihood × impact matrix and DREAD breakdown, model editor (JSON/YAML), Markdown/JSON export. Built by Vite into `dist/web`, which the API serves |
 | `src/api/server.js` | Express API (helmet security headers, rate limiting, 1 MB body limit) |
+| `schema/`, `docs/model-reference.md` | JSON Schema and field reference, generated from `src/schema/docs.js` (`npm run build:schema`) |
+| `templates/starter.yaml` | Starter model used by `init` and the web editor |
+| `action.yml` | GitHub Action: analyse a model, post the report to the job summary, fail on a severity |
 | `examples/ecommerce.json` | Case study 1: AWS serverless e-commerce platform |
 | `examples/healthcare.json` | Case study 2: FHIR/HL7 healthcare API, hybrid AWS + on-prem ([write-up](docs/case-studies/healthcare.md)) |
 | `examples/payroll-saas.json` | Case study 3: multi-tenant payroll SaaS on EKS with the CI/CD pipeline in scope ([write-up](docs/case-studies/payroll-saas.md)) |

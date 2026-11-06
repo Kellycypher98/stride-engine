@@ -52,3 +52,27 @@ test('cli: rules command lists the rule base', () => {
   assert.equal(code, EXIT.OK);
   assert.equal(stdout.trim().split('\n').length, 18);
 });
+
+test('cli: init writes the starter (refusing to overwrite), and validate reports warnings without analysing', () => {
+  const out = path.join(tmp, 'threat-model.yaml');
+  assert.equal(run(['init']).stdout, fs.readFileSync(path.join(__dirname, '..', 'templates', 'starter.yaml'), 'utf8'));
+  assert.equal(run(['init', '--out', out]).code, EXIT.OK);
+  assert.equal(run(['init', '--out', out]).code, EXIT.ERROR, 'never overwrites an existing model');
+
+  const ok = run(['validate', out]);
+  assert.equal(ok.code, EXIT.OK);
+  assert.match(ok.stdout, /is valid: 5 components/);
+  assert.equal(ok.stderr, '');
+
+  fs.writeFileSync(out, fs.readFileSync(out, 'utf8').replace('encryptionAtRest: true', 'encryptionAtRst: true'));
+  const typo = run(['validate', out]);
+  assert.equal(typo.code, EXIT.OK);
+  assert.match(typo.stderr, /Did you mean "encryptionAtRest"/);
+  assert.match(run(['analyze', out, '--format', 'json']).stderr, /encryptionAtRst/, 'warnings reach the build log');
+
+  const bad = path.join(tmp, 'bad-ref.yaml');
+  fs.writeFileSync(bad, fs.readFileSync(out, 'utf8').replace('to: db', 'to: dbb'));
+  const invalid = run(['validate', bad]);
+  assert.equal(invalid.code, EXIT.INVALID);
+  assert.match(invalid.stderr, /unknown target "dbb"/);
+});

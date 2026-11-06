@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { looksLikeJson } from '../api.js';
+import starter from '../../../templates/starter.yaml?raw';
+
+const GUIDE = 'https://github.com/Kellycypher98/stride-engine/blob/master/docs/modelling-guide.md';
 
 export default function ModelDrawer({ open, draft, onDraft, onClose, onAnalyse, error, onError, busy }) {
   const textarea = useRef(null);
@@ -46,8 +49,18 @@ export default function ModelDrawer({ open, draft, onDraft, onClose, onAnalyse, 
           <h2 id="drawer-h" className="text-lg font-bold">Architecture model</h2>
           <button type="button" className="btn btn-quiet" onClick={onClose}>Close</button>
         </div>
-        <p className="text-xs text-ink-2">Paste JSON or YAML, or upload a file up to 1 MB. Models are analysed in memory and never stored.</p>
-        <div className="flex items-center gap-3">
+        <p className="text-xs text-ink-2">
+          Describe your system as trust boundaries, components and data flows, in JSON or YAML. Controls you leave out
+          count as missing. New to this? Start from the template and read the{' '}
+          <a className="text-action underline underline-offset-2" href={GUIDE} target="_blank" rel="noopener noreferrer">modelling guide</a>.
+          Models are analysed in memory and never stored.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" className="btn" onClick={() => {
+              onDraft(starter);
+              onError(null);
+              requestAnimationFrame(() => { const t = textarea.current; if (t) { t.scrollTop = 0; t.setSelectionRange(0, 0); t.focus(); } });
+            }}>Start from template</button>
           <label className="btn relative focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-action">
             Upload file
             <input

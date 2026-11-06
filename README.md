@@ -24,7 +24,7 @@ In GitHub Actions:
     fail-on: High
 ```
 
-Read the [modelling guide](docs/modelling-guide.md) first (about 15 minutes). Every field is listed in the
+New to it? [How it works](docs/how-it-works.md) explains the idea in two minutes: stride-engine reads a *description* of your system, never the system itself. Then read the [modelling guide](docs/modelling-guide.md) (about 15 minutes). Every field is listed in the
 [model reference](docs/model-reference.md). The [JSON Schema](schema/architecture.schema.json) gives
 autocomplete and inline errors in VS Code and JetBrains editors.
 

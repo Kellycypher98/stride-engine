@@ -23,6 +23,16 @@ export default function Summary({ report, filters, onToggle }) {
           {summary.coverage.rulesTriggered} of {summary.coverage.rulesEvaluated} rules raised a threat.
           Scored by {SCORING_LABEL[scoring.method] || scoring.method}.
         </p>
+        {report.warnings?.length > 0 && (
+          <details className="mt-3 max-w-[80ch] border-l-[3px] border-medium bg-medium-wash px-3 py-2 text-xs">
+            <summary className="cursor-pointer font-bold">
+              {plural(report.warnings.length, 'part', 'parts')} of the model may be unintended and can cause false threats
+            </summary>
+            <ul className="mt-1.5 list-disc space-y-1 pl-[18px]">
+              {report.warnings.map((w) => <li key={`${w.code}-${w.target}-${w.message}`}>{w.message}</li>)}
+            </ul>
+          </details>
+        )}
       </div>
 
       {/* The STRIDE acronym is the category filter: one letter per category. */}

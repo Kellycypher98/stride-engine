@@ -7,9 +7,18 @@ import Summary from './components/Summary.jsx';
 import Diagram from './components/Diagram.jsx';
 import ThreatList from './components/ThreatList.jsx';
 import Inspector from './components/Inspector.jsx';
+import HowItWorks from './components/HowItWorks.jsx';
+import starter from '../../templates/starter.yaml?raw';
 
 const NO_FILTERS = { category: '', severity: '', target: '' };
+const INTRO_KEY = 'stride-engine:intro-dismissed';
 
+function readFlag(key) {
+  try { return window.localStorage.getItem(key) === '1'; } catch { return false; }
+}
+function writeFlag(key) {
+  try { window.localStorage.setItem(key, '1'); } catch { /* storage unavailable: show again next time */ }
+}
 
 export default function App() {
   const [examples, setExamples] = useState([]);
@@ -24,6 +33,21 @@ export default function App() {
   const [drawer, setDrawer] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [help, setHelp] = useState(false);
+  const [intro, setIntro] = useState(() => !readFlag(INTRO_KEY));
+
+  // Stable handlers: the dialogs restore focus when these change.
+  const closeDrawer = useCallback(() => setDrawer(false), []);
+  const closeHelp = useCallback(() => setHelp(false), []);
+  const dismissIntro = () => { setIntro(false); writeFlag(INTRO_KEY); };
+  const tryTemplate = () => {
+    setHelp(false);
+    dismissIntro();
+    setDraft(starter);
+    setExample(CUSTOM);
+    setError(null);
+    setDrawer(true);
+  };
 
   const report = result?.report;
 
@@ -123,13 +147,16 @@ export default function App() {
         canExport={Boolean(report)}
         onMarkdown={exportMarkdown}
         onJson={exportJson}
+        onHelp={() => setHelp(true)}
       />
+
+      <HowItWorks open={help} onClose={closeHelp} onTry={tryTemplate} />
 
       <ModelDrawer
         open={drawer}
         draft={draft}
         onDraft={(t) => { setDraft(t); setExample(CUSTOM); }}
-        onClose={() => setDrawer(false)}
+        onClose={closeDrawer}
         onAnalyse={() => run(draft, scoring)}
         error={error}
         onError={setError}
@@ -137,6 +164,18 @@ export default function App() {
       />
 
       <main className="px-[clamp(16px,3vw,32px)] pb-10">
+        {intro && (
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-grid bg-sheet px-4 py-2.5">
+            <p className="min-w-0 flex-1">
+              <b>New here?</b> stride-engine reads a <i>description</i> of your system and finds design threats. It never
+              connects to your APIs or servers.
+            </p>
+            <div className="flex gap-2">
+              <button type="button" className="btn btn-primary" onClick={() => setHelp(true)}>How it works</button>
+              <button type="button" className="btn btn-quiet" onClick={dismissIntro}>Dismiss</button>
+            </div>
+          </div>
+        )}
         <Summary report={report} filters={filters} onToggle={toggleFilter} />
 
         <Diagram

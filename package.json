@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build:ui": "vite build --config ui/vite.config.mjs",
+    "build:schema": "node scripts/build-schema.js",
     "dev:ui": "vite --config ui/vite.config.mjs",
     "pretest": "npm run build:ui",
     "test": "node --test \"test/**/*.test.js\"",
@@ -39,6 +40,7 @@
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@tailwindcss/vite": "^4.3.4",
     "@vitejs/plugin-react": "^4.7.0",
+    "ajv": "^8.20.0",
     "d3": "^7.9.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

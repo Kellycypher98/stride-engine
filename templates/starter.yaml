@@ -1,0 +1,106 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Kellycypher98/stride-engine/master/schema/architecture.schema.json
+#
+# stride-engine starter model. Replace the example system with yours, then run:
+#   npx github:Kellycypher98/stride-engine analyze threat-model.yaml
+#
+# Three things to describe:
+#   1. trustBoundaries: zones of equal trust, from the internet (level 0) inwards.
+#   2. components:      everything that sends, processes or stores data, plus users
+#                       and outside systems. List the security controls each has.
+#   3. dataFlows:       data moving from one component to another.
+#
+# Controls you leave out count as MISSING, so list every control you actually have.
+# Guide: https://github.com/Kellycypher98/stride-engine/blob/master/docs/modelling-guide.md
+
+name: My web application
+version: "1.0"
+
+trustBoundaries:
+  - id: internet
+    name: Public internet
+    level: 0
+  - id: edge
+    name: Public endpoints
+    level: 1
+  - id: app
+    name: Private application subnets
+    level: 2
+  - id: data
+    name: Data tier
+    level: 3
+
+components:
+  - id: customer
+    name: Customer
+    type: user
+    trustBoundary: internet
+
+  - id: api
+    name: API Gateway
+    type: api
+    trustBoundary: edge
+    properties:
+      publicFacing: true
+      authentication: oauth      # none | basic | api_key | token | oauth | mtls
+      authorization: true        # checks what each caller may access, not just who they are
+      inputValidation: true
+      rateLimited: true
+      waf: true
+      logging: true
+      leastPrivilege: true
+      dependencyScanning: true
+
+  - id: orders
+    name: Order service
+    type: service                # long-running service or container; use "function" for Lambda
+    trustBoundary: app
+    properties:
+      authentication: token
+      authorization: true
+      inputValidation: true
+      logging: true
+      leastPrivilege: true
+      privileged: false          # true if it runs as root / privileged container
+      dependencyScanning: true
+      dataClassification: confidential
+
+  - id: db
+    name: Orders database
+    type: database
+    trustBoundary: data
+    properties:
+      dataClassification: confidential   # public | internal | confidential | restricted
+      encryptionAtRest: true
+      logging: true
+      redundancy: true
+
+  - id: logs
+    name: CloudTrail + CloudWatch
+    type: monitoring
+    trustBoundary: data
+
+dataFlows:
+  - id: f1
+    from: customer
+    to: api
+    protocol: https
+    authenticated: true
+    dataClassification: confidential
+  - id: f2
+    from: api
+    to: orders
+    protocol: https
+    authenticated: true
+    dataClassification: confidential
+  - id: f3
+    from: orders
+    to: db
+    protocol: tls
+    authenticated: true
+    dataClassification: confidential
+  - id: f4
+    from: orders
+    to: logs
+    protocol: https
+    authenticated: true
+    dataClassification: internal

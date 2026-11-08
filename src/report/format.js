@@ -33,6 +33,10 @@ function toMarkdown(report) {
   for (const [s, n] of Object.entries(summary.bySeverity)) lines.push(`| ${s} | ${n} |`);
   lines.push('', '| STRIDE category | Count |', '| --- | --- |');
   for (const [c, n] of Object.entries(summary.byCategory)) lines.push(`| ${c} | ${n} |`);
+  if (report.warnings.length) {
+    lines.push('', '## Model warnings', '', 'These parts of the model look unintended and may cause false findings:', '');
+    for (const w of report.warnings) lines.push(`- ${w.message}`);
+  }
   lines.push('', '## Findings', '');
   lines.push('| # | Score | Severity | Rule | Category | Target | Title |', '| --- | --- | --- | --- | --- | --- | --- |');
   findings.forEach((f, i) => {
@@ -62,7 +66,9 @@ function toText(report) {
   const out = [];
   out.push(`${model.name} — ${summary.total} findings (${scoringLabel(scoring)})`);
   out.push(Object.entries(summary.bySeverity).map(([s, n]) => `${s}: ${n}`).join('  '));
+  for (const w of report.warnings) out.push(`warning: ${w.message}`);
   out.push('');
+  if (!findings.length) out.push(`No threats found by the ${summary.coverage.rulesEvaluated} rules.`);
   for (const f of findings) {
     out.push(`${f.score.toFixed(1).padStart(4)}  ${f.severity.padEnd(8)} ${f.ruleId}  ${f.title} — ${f.target.name}`);
   }

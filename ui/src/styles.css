@@ -124,6 +124,8 @@
 
 .dfd .zone-label { font: 700 13px var(--font-sans); fill: var(--boundary); }
 .dfd .zone-level { font: 400 12px var(--font-sans); fill: var(--ink-2); }
+.dfd .axis-label { font: 700 12px var(--font-sans); fill: var(--ink-2); }
+.dfd .axis-line { stroke: var(--grid); stroke-width: 1.5; }
 .dfd .boundary { stroke: var(--boundary); stroke-width: 1.5; stroke-dasharray: 6 5; }
 
 .dfd .flow { fill: none; stroke: var(--grid); stroke-width: 1.4; }

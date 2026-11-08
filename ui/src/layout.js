@@ -13,7 +13,7 @@ import { path as d3path } from 'd3-path';
 import { cut } from './constants.js';
 
 export const GEOMETRY = Object.freeze({
-  NODE_W: 176, NODE_H: 58, COL_W: 214, ROW_GAP: 24, HEAD: 78, PAD_X: 8, PAD_BOTTOM: 52,
+  NODE_W: 176, NODE_H: 58, COL_W: 214, ROW_GAP: 24, HEAD: 120, PAD_X: 8, PAD_BOTTOM: 52,
 });
 
 const link = linkHorizontal().x((p) => p.x).y((p) => p.y);
@@ -124,6 +124,8 @@ export function layoutDfd(arch) {
 
   return {
     zones: zones.map((z, i) => ({ ...z, x: PAD_X + i * COL_W })),
+    axisY: 18,
+    zoneY: 52,
     nodes: [...nodes.values()],
     flows,
     width: PAD_X * 2 + zones.length * COL_W,

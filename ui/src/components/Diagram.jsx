@@ -2,33 +2,125 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { select } from 'd3-selection';
 import { zoom as d3zoom, zoomIdentity, zoomTransform } from 'd3-zoom';
 import 'd3-transition';
-import { layoutDfd, wrap } from '../layout.js';
-import { SEVERITIES, cut, kindOf, plural, typeLabel, worse } from '../constants.js';
+import {
+  Activity, AppWindow, Building2, Database, FolderArchive, Globe, Inbox, KeyRound, MemoryStick, Server, Split, User, Webhook, Zap,
+} from 'lucide-react';
+import { GEOMETRY, iconCentre, layoutDfd, wrap } from '../layout.js';
+import { SEVERITIES, kindOf, plural, typeLabel, worse } from '../constants.js';
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function Legend() {
-  const item = 'inline-flex items-center gap-[7px] before:inline-block before:h-3 before:w-[22px] before:border-[1.5px] before:border-ink-2 before:content-[""]';
+/** One icon per component type, so each part shows what it is. */
+const ICONS = {
+  user: User, external_service: Building2,
+  web_app: AppWindow, api: Webhook, service: Server, function: Zap,
+  identity_provider: KeyRound, cdn: Globe, load_balancer: Split, monitoring: Activity,
+  database: Database, object_storage: FolderArchive, cache: MemoryStick, queue: Inbox,
+};
+
+const KIND_WORDS = { actor: 'person or outside system', process: 'your software', store: 'data store' };
+
+const KEY_GROUPS = [
+  ['People and outside systems', [['user', 'person'], ['external_service', 'outside system']]],
+  ['Your software', [['web_app', 'web app'], ['api', 'API'], ['service', 'service'], ['function', 'function'],
+    ['identity_provider', 'sign-in'], ['cdn', 'CDN'], ['load_balancer', 'load balancer'], ['monitoring', 'monitoring']]],
+  ['Where data is stored', [['database', 'database'], ['object_storage', 'file storage'], ['cache', 'cache'], ['queue', 'queue']]],
+];
+
+/** Key explaining every mark on the diagram, drawn with the same shapes and colours. */
+function DiagramKey() {
+  const G = ({ children, w = 34 }) => <svg width={w} height="22" viewBox={`0 0 ${w} 22`} className="dfd shrink-0" aria-hidden="true">{children}</svg>;
+  const Item = ({ glyph, children }) => <li className="flex items-center gap-2.5">{glyph}<span>{children}</span></li>;
   return (
-    <div className="flex flex-wrap gap-x-[18px] gap-y-1.5 text-xs text-ink-2" aria-hidden="true">
-      <span className={`${item} before:rounded-none`}>External entity</span>
-      <span className={`${item} before:rounded-lg`}>Process</span>
-      <span className={`${item} before:border-r-0`}>Data store</span>
-      <span className="inline-flex items-center gap-[7px] before:inline-block before:h-3.5 before:border-l-2 before:border-dashed before:border-boundary before:content-['']">Trust boundary</span>
+    <div className="mt-3 rounded-lg border border-grid px-4 py-3 text-xs">
+      <h3 className="mb-2 text-sm font-bold">How to read the diagram</h3>
+      <p className="mb-1.5 text-ink-2">Each circle is one part of the system. The icon shows what kind of part it is:</p>
+      <dl className="mb-3 grid gap-x-6 gap-y-2 sm:grid-cols-3">
+        {KEY_GROUPS.map(([group, types]) => (
+          <div key={group}>
+            <dt className="font-bold text-ink">{group}</dt>
+            <dd className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-ink-2">
+              {types.map(([t, word]) => {
+                const I = ICONS[t];
+                return <span key={t} className="inline-flex items-center gap-1"><I width={15} height={15} strokeWidth={1.75} aria-hidden="true" />{word}</span>;
+              })}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <ul className="grid gap-x-6 gap-y-2 text-ink-2 sm:grid-cols-2 lg:grid-cols-3">
+        <Item glyph={<G><path className="flow" d="M2,11 H26" markerEnd="url(#ah-none)" /></G>}>
+          <b className="text-ink">Arrow:</b> data moving, in the direction of the arrow
+        </Item>
+        <Item glyph={<G w={20}><line className="boundary" x1="10" y1="0" x2="10" y2="22" /></G>}>
+          <b className="text-ink">Dashed purple line:</b> a trust boundary. Data crossing it moves between more and less trusted areas, where most threats occur
+        </Item>
+        <Item glyph={<G w={24}><circle className="badge fill-High" cx="12" cy="11" r="9" /><text className="badge-n" x="12" y="11.5">2</text></G>}>
+          <b className="text-ink">Number in a circle:</b> how many threats were found on that part
+        </Item>
+        <Item glyph={<G w={24}><rect className="badge fill-Medium" x="5" y="4" width="14" height="14" rx="2" transform="rotate(45 12 11)" /><text className="badge-n" x="12" y="11.5">1</text></G>}>
+          <b className="text-ink">Number in a diamond on a line:</b> threats found on that data flow
+        </Item>
+        <Item glyph={(
+          <span className="flex shrink-0 gap-0.5" aria-hidden="true">
+            {SEVERITIES.map((sv) => <i key={sv} className={`bg-sev-${sv} block size-3 rounded-full`} />)}
+          </span>
+        )}
+        >
+          <b className="text-ink">Colour:</b> the most serious threat there: Critical, High, Medium or Low
+        </Item>
+        <Item glyph={<G><path className="flow" d="M2,11 H32" /></G>}>
+          <b className="text-ink">Grey:</b> no threats found
+        </Item>
+      </ul>
+    </div>
+  );
+}
+
+/** What is selected on the diagram, in plain words, with its threat counts. */
+function SelectionCard({ id, layout, report, onClear }) {
+  const node = layout.nodes.find((n) => n.id === id);
+  const flow = layout.flows.find((f) => f.id === id);
+  if (!node && !flow) return null;
+  const threats = report.findings.filter((f) => f.target.id === id);
+  const bySev = SEVERITIES.map((s) => [s, threats.filter((f) => f.severity === s).length]).filter(([, n]) => n);
+  const title = node ? node.component.name : `${flow.from.name} → ${flow.to.name}`;
+  const what = node
+    ? `${KIND_WORDS[kindOf(node.component.type)]}, ${typeLabel(node.component.type)}`
+    : `data flow over ${flow.flow.protocol}, ${flow.flow.encrypted ? 'encrypted' : 'not encrypted'}`;
+  return (
+    <div className="absolute bottom-2 left-2 z-10 max-w-[min(360px,calc(100%-150px))] rounded-md border border-ink bg-sheet px-3 py-2.5 text-xs shadow-sm max-sm:max-w-[calc(100%-16px)] max-sm:bottom-12" role="status">
+      <p className="text-sm font-bold">{title}</p>
+      <p className="text-ink-2">{what}</p>
+      <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+        {threats.length === 0 ? <span>No threats found here.</span> : (
+          <>
+            <span className="font-bold">{plural(threats.length, 'threat')}:</span>
+            {bySev.map(([s, n]) => (
+              <span key={s} className="inline-flex items-center gap-1"><i className={`bg-sev-${s} size-2 rounded-full`} aria-hidden="true" />{n} {s}</span>
+            ))}
+          </>
+        )}
+      </p>
+      <div className="mt-2 flex gap-3">
+        {threats.length > 0 && <a href="#threats" className="text-action underline underline-offset-2">Show its threats</a>}
+        <button type="button" className="text-action underline underline-offset-2" onClick={onClear}>Clear selection</button>
+      </div>
     </div>
   );
 }
 
 function Node({ node, count, sev, selected, lit, pulse, onPick }) {
-  const { x, y, w, h, component: c } = node;
-  const kind = kindOf(c.type);
-  const lines = wrap(c.name, kind === 'process' ? 20 : 22);
-  const tx = x + (kind === 'process' ? 18 : 12);
-  const top = lines.length === 1 ? y + 25 : y + 19;
+  const { component: c } = node;
+  const { ICON_R } = GEOMETRY;
+  const { x: cx, y: cy } = iconCentre(node);
+  const Icon = ICONS[c.type];
+  const lines = wrap(c.name, 22);
+  const top = cy + ICON_R + 18;
   const label = `${c.name}, ${typeLabel(c.type)}. ${count ? `${plural(count, 'threat')}, worst ${sev}` : 'No threats'}`;
   return (
     <g
-      className={`node${selected ? ' selected' : ''}${lit ? ' lit' : ''}${pulse ? ' pulse' : ''}`}
+      className={`node kind-${kindOf(c.type)}${selected ? ' selected' : ''}${lit ? ' lit' : ''}${pulse ? ' pulse' : ''}`}
       data-id={c.id}
       tabIndex={0}
       role="button"
@@ -37,20 +129,16 @@ function Node({ node, count, sev, selected, lit, pulse, onPick }) {
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(c.id); } }}
     >
       <title>{`${c.name} (${typeLabel(c.type)})${c.description ? `\n${c.description}` : ''}`}</title>
-      {kind === 'store' ? (
-        <>
-          <rect className="store-fill" x={x} y={y} width={w} height={h} />
-          <path className="store-line" d={`M${x + w},${y} H${x} V${y + h} H${x + w}`} />
-        </>
-      ) : (
-        <rect className="shape" x={x} y={y} width={w} height={h} rx={kind === 'actor' ? 2 : h / 2} />
-      )}
-      {lines.map((ln, k) => <text key={ln} className="name" x={tx} y={top + k * 15}>{ln}</text>)}
-      <text className="type" x={tx} y={top + lines.length * 15 + 1}>{typeLabel(c.type)}</text>
+      {/* Generous transparent hit area covering icon and label. */}
+      <rect className="hit" x={node.x} y={node.y} width={node.w} height={node.h} />
+      <circle className="shape" cx={cx} cy={cy} r={ICON_R} />
+      <Icon x={cx - 11} y={cy - 11} width={22} height={22} strokeWidth={1.75} className="icon" aria-hidden="true" />
+      {lines.map((ln, k) => <text key={ln} className="name" x={cx} y={top + k * 15} textAnchor="middle">{ln}</text>)}
+      <text className="type" x={cx} y={top + lines.length * 15 + 1} textAnchor="middle">{typeLabel(c.type)}</text>
       {count > 0 && (
         <>
-          <circle className={`badge fill-${sev}`} cx={x + w - 6} cy={y + 4} r={10} />
-          <text className="badge-n" x={x + w - 6} y={y + 4.5}>{count}</text>
+          <circle className={`badge fill-${sev}`} cx={cx + ICON_R * 0.78} cy={cy - ICON_R * 0.78} r={10} />
+          <text className="badge-n" x={cx + ICON_R * 0.78} y={cy - ICON_R * 0.78 + 0.5}>{count}</text>
         </>
       )}
     </g>
@@ -87,7 +175,8 @@ export default function Diagram({ report, architecture, filters, selected, pulse
     svg.call(z);
 
     const cw = svgRef.current.clientWidth;
-    const k = Math.min(1, Math.max(0.55, cw / layout.width));
+    // Fit wide screens; on narrow ones stay readable and let people drag to see the rest.
+    const k = Math.min(1, Math.max(cw < 640 ? 0.8 : 0.55, cw / layout.width));
     const tx = Math.max(0, (cw - layout.width * k) / 2);
     initial.current = zoomIdentity.translate(tx, 0).scale(k);
     setHeight(Math.ceil(layout.height * k));
@@ -133,9 +222,12 @@ export default function Diagram({ report, architecture, filters, selected, pulse
 
   return (
     <section aria-labelledby="dfd-h" className="border-t border-grid pt-5 pb-7">
-      <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
-        <h2 id="dfd-h" className="text-lg font-bold">Data flow diagram</h2>
-        <Legend />
+      <div className="mb-2.5">
+        <h2 id="dfd-h" className="text-lg font-bold">System diagram</h2>
+        <p className="mt-0.5 max-w-[80ch] text-ink-2">
+          Who and what is in your system, and how data moves between them. Each threat is pinned to the part it
+          affects. Click any part or diamond to see its threats.
+        </p>
       </div>
 
       <div className="relative overflow-hidden rounded-lg border border-grid bg-sheet">
@@ -154,11 +246,19 @@ export default function Diagram({ report, architecture, filters, selected, pulse
             ))}
           </defs>
           <g ref={gRef}>
+            {/* Trust direction: zones run from least trusted (left) to most trusted (right). */}
+            <g className="trust-axis" aria-hidden="true">
+              <text className="axis-label" x={layout.zones[0].x + 16} y={layout.axisY}>Less trusted</text>
+              <line className="axis-line" x1={layout.zones[0].x + 104} y1={layout.axisY - 4} x2={layout.width - 112} y2={layout.axisY - 4} markerEnd="url(#ah-none)" />
+              <text className="axis-label" x={layout.width - 16} y={layout.axisY} textAnchor="end">More trusted</text>
+            </g>
             {layout.zones.map((z, i) => (
               <g key={z.id}>
-                {i > 0 && <line className="boundary" x1={z.x} y1={10} x2={z.x} y2={layout.height - 10} />}
-                <text className="zone-label" x={z.x + 16} y={28}><title>{z.name}</title>{cut(z.name, 27)}</text>
-                <text className="zone-level" x={z.x + 16} y={46}>{`Trust level ${z.level}`}</text>
+                {i > 0 && <line className="boundary" x1={z.x} y1={layout.zoneY - 18} x2={z.x} y2={layout.height - 10} />}
+                {wrap(z.name, 26).map((ln, k) => (
+                  <text key={ln} className="zone-label" x={z.x + 16} y={layout.zoneY + k * 16}><title>{z.name}</title>{ln}</text>
+                ))}
+                <text className="zone-level" x={z.x + 16} y={layout.zoneY + (wrap(z.name, 26).length - 1) * 16 + 18}>{`Trust level ${z.level}`}</text>
               </g>
             ))}
 
@@ -211,13 +311,22 @@ export default function Diagram({ report, architecture, filters, selected, pulse
           </g>
         </svg>
 
+        {focus
+          ? <SelectionCard id={focus} layout={layout} report={report} onClear={() => pick(focus)} />
+          : (
+            <p className="pointer-events-none absolute bottom-3 left-3 rounded bg-sheet/90 px-2 py-1 text-xs text-ink-2 max-sm:hidden">
+              Click any part or diamond to see its threats.
+            </p>
+          )}
+
         <div className="absolute right-2 bottom-2 flex gap-1">
           <button type="button" className="btn min-h-8 bg-sheet/90 px-2.5" aria-label="Zoom out" onClick={() => zoomBy(0.8)}>−</button>
           <button type="button" className="btn min-h-8 bg-sheet/90 px-2.5" aria-label="Zoom in" onClick={() => zoomBy(1.25)}>+</button>
           <button type="button" className="btn min-h-8 bg-sheet/90 px-2.5" onClick={fit}>Fit</button>
         </div>
       </div>
-      <p className="mt-2 text-xs text-ink-2">Drag to pan. Pinch, or hold Ctrl or ⌘ and scroll, to zoom.</p>
+      <p className="mt-2 text-xs text-ink-2">Drag to move around. Pinch, or hold Ctrl or ⌘ and scroll, to zoom.</p>
+      <DiagramKey />
     </section>
   );
 }

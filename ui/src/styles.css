@@ -124,6 +124,8 @@
 
 .dfd .zone-label { font: 700 13px var(--font-sans); fill: var(--boundary); }
 .dfd .zone-level { font: 400 12px var(--font-sans); fill: var(--ink-2); }
+.dfd .axis-label { font: 700 12px var(--font-sans); fill: var(--ink-2); }
+.dfd .axis-line { stroke: var(--grid); stroke-width: 1.5; }
 .dfd .boundary { stroke: var(--boundary); stroke-width: 1.5; stroke-dasharray: 6 5; }
 
 .dfd .flow { fill: none; stroke: var(--grid); stroke-width: 1.4; }
@@ -141,6 +143,12 @@
 
 .dfd .node { cursor: pointer; }
 .dfd .node .shape { fill: var(--sheet); stroke: var(--ink-2); stroke-width: 1.4; }
+.dfd .node .hit { fill: transparent; }
+/* Halo so data-flow lines pass behind labels instead of through them. */
+.dfd .node .name, .dfd .node .type { paint-order: stroke; stroke: var(--sheet); stroke-width: 5px; stroke-linejoin: round; }
+.dfd .node .icon { color: var(--ink); pointer-events: none; }
+.dfd .node.kind-actor .shape { fill: var(--paper); stroke-dasharray: 3 2; }
+.dfd .node.kind-store .shape { fill: var(--grid-soft); }
 .dfd .node .store-line { fill: none; stroke: var(--ink-2); stroke-width: 1.6; }
 .dfd .node .store-fill { fill: var(--sheet); }
 .dfd .node .name { font: 700 13px var(--font-sans); fill: var(--ink); }

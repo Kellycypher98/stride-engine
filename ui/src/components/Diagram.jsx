@@ -2,12 +2,30 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { select } from 'd3-selection';
 import { zoom as d3zoom, zoomIdentity, zoomTransform } from 'd3-zoom';
 import 'd3-transition';
-import { layoutDfd, wrap } from '../layout.js';
+import {
+  Activity, AppWindow, Building2, Database, FolderArchive, Globe, Inbox, KeyRound, MemoryStick, Server, Split, User, Webhook, Zap,
+} from 'lucide-react';
+import { GEOMETRY, iconCentre, layoutDfd, wrap } from '../layout.js';
 import { SEVERITIES, kindOf, plural, typeLabel, worse } from '../constants.js';
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/** One icon per component type, so each part shows what it is. */
+const ICONS = {
+  user: User, external_service: Building2,
+  web_app: AppWindow, api: Webhook, service: Server, function: Zap,
+  identity_provider: KeyRound, cdn: Globe, load_balancer: Split, monitoring: Activity,
+  database: Database, object_storage: FolderArchive, cache: MemoryStick, queue: Inbox,
+};
+
 const KIND_WORDS = { actor: 'person or outside system', process: 'your software', store: 'data store' };
+
+const KEY_GROUPS = [
+  ['People and outside systems', [['user', 'person'], ['external_service', 'outside system']]],
+  ['Your software', [['web_app', 'web app'], ['api', 'API'], ['service', 'service'], ['function', 'function'],
+    ['identity_provider', 'sign-in'], ['cdn', 'CDN'], ['load_balancer', 'load balancer'], ['monitoring', 'monitoring']]],
+  ['Where data is stored', [['database', 'database'], ['object_storage', 'file storage'], ['cache', 'cache'], ['queue', 'queue']]],
+];
 
 /** Key explaining every mark on the diagram, drawn with the same shapes and colours. */
 function DiagramKey() {
@@ -16,16 +34,21 @@ function DiagramKey() {
   return (
     <div className="mt-3 rounded-lg border border-grid px-4 py-3 text-xs">
       <h3 className="mb-2 text-sm font-bold">How to read the diagram</h3>
+      <p className="mb-1.5 text-ink-2">Each circle is one part of the system. The icon shows what kind of part it is:</p>
+      <dl className="mb-3 grid gap-x-6 gap-y-2 sm:grid-cols-3">
+        {KEY_GROUPS.map(([group, types]) => (
+          <div key={group}>
+            <dt className="font-bold text-ink">{group}</dt>
+            <dd className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-ink-2">
+              {types.map(([t, word]) => {
+                const I = ICONS[t];
+                return <span key={t} className="inline-flex items-center gap-1"><I width={15} height={15} strokeWidth={1.75} aria-hidden="true" />{word}</span>;
+              })}
+            </dd>
+          </div>
+        ))}
+      </dl>
       <ul className="grid gap-x-6 gap-y-2 text-ink-2 sm:grid-cols-2 lg:grid-cols-3">
-        <Item glyph={<G><g className="node"><rect className="shape" x="2" y="3" width="30" height="16" rx="2" /></g></G>}>
-          <b className="text-ink">Square box:</b> a person or an outside system (a customer, a bank, a SaaS provider)
-        </Item>
-        <Item glyph={<G><g className="node"><rect className="shape" x="2" y="3" width="30" height="16" rx="8" /></g></G>}>
-          <b className="text-ink">Rounded box:</b> your software (a web app, API, service or function)
-        </Item>
-        <Item glyph={<G><g className="node"><rect className="store-fill" x="2" y="3" width="30" height="16" /><path className="store-line" d="M32,3 H2 V19 H32" /></g></G>}>
-          <b className="text-ink">Open box:</b> where data is stored (a database, bucket, cache or queue)
-        </Item>
         <Item glyph={<G><path className="flow" d="M2,11 H26" markerEnd="url(#ah-none)" /></G>}>
           <b className="text-ink">Arrow:</b> data moving, in the direction of the arrow
         </Item>
@@ -88,15 +111,16 @@ function SelectionCard({ id, layout, report, onClear }) {
 }
 
 function Node({ node, count, sev, selected, lit, pulse, onPick }) {
-  const { x, y, w, h, component: c } = node;
-  const kind = kindOf(c.type);
-  const lines = wrap(c.name, kind === 'process' ? 20 : 22);
-  const tx = x + (kind === 'process' ? 18 : 12);
-  const top = lines.length === 1 ? y + 25 : y + 19;
+  const { component: c } = node;
+  const { ICON_R } = GEOMETRY;
+  const { x: cx, y: cy } = iconCentre(node);
+  const Icon = ICONS[c.type];
+  const lines = wrap(c.name, 22);
+  const top = cy + ICON_R + 18;
   const label = `${c.name}, ${typeLabel(c.type)}. ${count ? `${plural(count, 'threat')}, worst ${sev}` : 'No threats'}`;
   return (
     <g
-      className={`node${selected ? ' selected' : ''}${lit ? ' lit' : ''}${pulse ? ' pulse' : ''}`}
+      className={`node kind-${kindOf(c.type)}${selected ? ' selected' : ''}${lit ? ' lit' : ''}${pulse ? ' pulse' : ''}`}
       data-id={c.id}
       tabIndex={0}
       role="button"
@@ -105,20 +129,16 @@ function Node({ node, count, sev, selected, lit, pulse, onPick }) {
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(c.id); } }}
     >
       <title>{`${c.name} (${typeLabel(c.type)})${c.description ? `\n${c.description}` : ''}`}</title>
-      {kind === 'store' ? (
-        <>
-          <rect className="store-fill" x={x} y={y} width={w} height={h} />
-          <path className="store-line" d={`M${x + w},${y} H${x} V${y + h} H${x + w}`} />
-        </>
-      ) : (
-        <rect className="shape" x={x} y={y} width={w} height={h} rx={kind === 'actor' ? 2 : h / 2} />
-      )}
-      {lines.map((ln, k) => <text key={ln} className="name" x={tx} y={top + k * 15}>{ln}</text>)}
-      <text className="type" x={tx} y={top + lines.length * 15 + 1}>{typeLabel(c.type)}</text>
+      {/* Generous transparent hit area covering icon and label. */}
+      <rect className="hit" x={node.x} y={node.y} width={node.w} height={node.h} />
+      <circle className="shape" cx={cx} cy={cy} r={ICON_R} />
+      <Icon x={cx - 11} y={cy - 11} width={22} height={22} strokeWidth={1.75} className="icon" aria-hidden="true" />
+      {lines.map((ln, k) => <text key={ln} className="name" x={cx} y={top + k * 15} textAnchor="middle">{ln}</text>)}
+      <text className="type" x={cx} y={top + lines.length * 15 + 1} textAnchor="middle">{typeLabel(c.type)}</text>
       {count > 0 && (
         <>
-          <circle className={`badge fill-${sev}`} cx={x + w - 6} cy={y + 4} r={10} />
-          <text className="badge-n" x={x + w - 6} y={y + 4.5}>{count}</text>
+          <circle className={`badge fill-${sev}`} cx={cx + ICON_R * 0.78} cy={cy - ICON_R * 0.78} r={10} />
+          <text className="badge-n" x={cx + ICON_R * 0.78} y={cy - ICON_R * 0.78 + 0.5}>{count}</text>
         </>
       )}
     </g>
@@ -206,7 +226,7 @@ export default function Diagram({ report, architecture, filters, selected, pulse
         <h2 id="dfd-h" className="text-lg font-bold">System diagram</h2>
         <p className="mt-0.5 max-w-[80ch] text-ink-2">
           Who and what is in your system, and how data moves between them. Each threat is pinned to the part it
-          affects. Click any box or diamond to see its threats.
+          affects. Click any part or diamond to see its threats.
         </p>
       </div>
 
@@ -295,7 +315,7 @@ export default function Diagram({ report, architecture, filters, selected, pulse
           ? <SelectionCard id={focus} layout={layout} report={report} onClear={() => pick(focus)} />
           : (
             <p className="pointer-events-none absolute bottom-3 left-3 rounded bg-sheet/90 px-2 py-1 text-xs text-ink-2 max-sm:hidden">
-              Click any box or diamond to see its threats.
+              Click any part or diamond to see its threats.
             </p>
           )}
 

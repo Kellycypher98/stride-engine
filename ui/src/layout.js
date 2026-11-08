@@ -13,8 +13,12 @@ import { path as d3path } from 'd3-path';
 import { cut } from './constants.js';
 
 export const GEOMETRY = Object.freeze({
-  NODE_W: 176, NODE_H: 58, COL_W: 214, ROW_GAP: 24, HEAD: 120, PAD_X: 8, PAD_BOTTOM: 52,
+  NODE_W: 176, NODE_H: 92, COL_W: 214, ROW_GAP: 14, HEAD: 120, PAD_X: 8, PAD_BOTTOM: 52,
+  ICON_R: 21, ICON_CY: 23, // each node is an icon in a circle, with its name underneath
 });
+
+/** Centre of a node's icon circle; flows attach to this circle. */
+export const iconCentre = (node) => ({ x: node.x + node.w / 2, y: node.y + GEOMETRY.ICON_CY });
 
 const link = linkHorizontal().x((p) => p.x).y((p) => p.y);
 
@@ -95,9 +99,13 @@ export function layoutDfd(arch) {
     list.sort((u, v) => (u.otherY - v.otherY) || (u.flow < v.flow ? -1 : 1));
     list.forEach((item, k) => {
       const { node, side } = item;
-      ports.set(`${item.flow}:${item.end}`, {
-        x: side === 'r' ? node.x + node.w : node.x, y: node.y + (node.h * (k + 1)) / (list.length + 1), side,
-      });
+      // Spread a side's connections over the icon circle's edge, top to bottom.
+      const { ICON_R } = GEOMETRY;
+      const c = iconCentre(node);
+      const spread = list.length === 1 ? 0 : -0.6 + (1.2 * k) / (list.length - 1);
+      const dy = spread * ICON_R;
+      const dx = Math.sqrt(ICON_R * ICON_R - dy * dy);
+      ports.set(`${item.flow}:${item.end}`, { x: side === 'r' ? c.x + dx : c.x - dx, y: c.y + dy, side });
     });
   }
 
@@ -106,8 +114,8 @@ export function layoutDfd(arch) {
     const p2 = ports.get(`${f.id}:to`);
     let d; let mid;
     if (p1.side === p2.side) {
-      // Same-zone loop, kept inside the gap between zones.
-      const reach = Math.min(24, 14 + Math.abs(p2.y - p1.y) * 0.05);
+      // Same-zone loop, bulging out to the right of the icons.
+      const reach = Math.min(70, 40 + Math.abs(p2.y - p1.y) * 0.08);
       const c1 = { x: p1.x + reach, y: p1.y }; const c2 = { x: p2.x + reach, y: p2.y };
       const p = d3path();
       p.moveTo(p1.x, p1.y);
